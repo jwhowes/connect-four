@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 
-from torch import LongTensor
+from torch import LongTensor, FloatTensor
 from typing import Optional, List
+from dataclasses import dataclass
 
 from . import NUM_COLS
+from .model import BaseModel
 from .gym import State
 
 
-EXPLORE_COEFF = np.sqrt(2)
+EXPLORE_COEFF: float = 5.0
+MIXING_PARAMETER: float = 0.5
 
 
 class Node:
@@ -24,9 +28,20 @@ class Node:
         self.winner: Optional[0 | 1 | 2] = self.state.winner()
 
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
+        self.prior: Optional[FloatTensor] = None
 
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
-        self.value: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
+        self.rollout_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
+        self.model_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
+
+
+@dataclass
+class GameHistory:
+    boards: LongTensor
+    players: LongTensor
+
+    mcts_probs: FloatTensor
+    winner: int
 
 
 class MCTS:
@@ -56,14 +71,15 @@ class MCTS:
 
         return winner
 
-    def search(self):
-        parent_visits = self.root_visits
+    @torch.inference_mode()
+    def search(self, model: BaseModel):
         node = self.root
 
         while not node.leaf:
             quality = (
-                    torch.nan_to_num(node.value / node.num_visits, nan=0.0) +
-                    EXPLORE_COEFF * torch.sqrt(np.log(parent_visits) / (1 + node.num_visits))
+                (1 - MIXING_PARAMETER) * torch.nan_to_num(node.rollout_value / node.num_visits, nan=0.0) +
+                MIXING_PARAMETER * torch.nan_to_num(node.model_value / node.num_visits, nan=0.0) +
+                EXPLORE_COEFF * node.prior * torch.sqrt(node.num_visits.sum()) / (1 + node.num_visits)
             )
             quality[node.state.illegal_moves()] = float('-inf')
 
@@ -77,21 +93,60 @@ class MCTS:
                     action=child_idx
                 )
 
-            parent_visits = node.num_visits[child_idx]
             node = node.children[child_idx]
 
-        winner = MCTS.rollout(node)
+
+        board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32).permute(0, 3, 1, 2)
+        if node.state.player != 1:
+            board = board[:, [0, 2, 1]]
+
+        model_winner, prior = model(board)
+        model_winner = F.softmax(model_winner, dim=-1).squeeze(0)
+        prior = F.softmax(prior, dim=-1).squeeze(0)
+
+        node.prior = prior
+        rollout_winner = MCTS.rollout(node)
 
         while node.parent is not None:
             action = node.action
             node = node.parent
 
-            node.value[action] += 2 * int(winner == node.state.player) - 1
+            node.rollout_value[action] += 2 * int(rollout_winner == node.state.player) - 1
+            node.model_value[action] += 2 * model_winner[node.state.player] - 1
 
-    def run_simulations(self):
+    @staticmethod
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
+        model.eval()
+        model.requires_grad_(False)
+
+        mcts = MCTS(sims_per_move=sims_per_move)
+
+        players: List[int] = []
+        boards: List[LongTensor] = []
+        mcts_probs: List[FloatTensor] = []
+        while mcts.root.winner is None:
+            mcts.run_simulations(model)
+
+            likelihood = mcts.root.num_visits ** (1 / temperature)
+            mcts_prob = likelihood / likelihood.sum()
+
+            mcts_probs.append(mcts_prob)
+            boards.append(mcts.root.state.board)
+            players.append(mcts.root.state.player)
+
+            action = torch.multinomial(mcts_prob, 1)[0]
+            mcts.step(action)
+
+        return GameHistory(
+            boards=torch.stack(boards),
+            players=torch.tensor(players, dtype=torch.long),
+            mcts_probs=torch.stack(mcts_probs),
+            winner=mcts.root.winner
+        )
+
+    def run_simulations(self, model: BaseModel):
         for _ in range(self.sims_per_move):
-            self.search()
-            # self.root.search(self.root_visits)
+            self.search(model)
 
     def step(self, action: int):
         if self.root.children[action] is None:

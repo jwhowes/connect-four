@@ -2,6 +2,8 @@ import click
 import warnings
 
 from src.mcts import MCTS
+from src.model import ConvModel
+
 
 @click.group()
 @click.pass_context
@@ -16,13 +18,15 @@ def cli(ctx: click.Context):
 def play(num_sims, computer_first):
     mcts = MCTS(sims_per_move=num_sims)
 
+    model = ConvModel(dims=(64,), depths=(3,))
+
     player = not computer_first
     while mcts.root.state.winner() is None:
         mcts.root.state.display()
         if player:
             action = int(input("Enter your move: "))
         else:
-            mcts.run_simulations()
+            mcts.run_simulations(model)
             action = mcts.root.num_visits.argmax()
             print(f"Computer move: {int(action)}")
 
