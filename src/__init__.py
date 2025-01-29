@@ -1,0 +1,2 @@
+NUM_COLS = 6
+NUM_ROWS = 7
