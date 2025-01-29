@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import numpy as np
 
@@ -12,62 +14,19 @@ EXPLORE_COEFF = np.sqrt(2)
 
 
 class Node:
-    def __init__(self, state: State):
+    def __init__(self, state: State, parent: Optional[Node] = None, action: int = -1):
         self.leaf: bool = True
 
         self.state: State = state
+        self.action: int = action
+        self.parent: Optional[Node] = parent
 
         self.winner: Optional[0 | 1 | 2] = self.state.winner()
 
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
 
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
-        self.num_wins: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
-
-    def rollout(self) -> 0 | 1 | 2:
-        self.leaf = False
-        if self.winner is not None:
-            return self.winner
-
-        child_idx = np.random.choice(torch.where(~self.state.illegal_moves())[0])
-
-        self.num_visits[child_idx] = 1
-        self.children[child_idx] = Node(
-            self.state.step(child_idx)
-        )
-
-        winner = self.children[child_idx].rollout()
-
-        self.num_wins[child_idx] += int(winner == self.state.player)
-        return winner
-
-    def search(self, parent_visits: int = 1) -> 0 | 1 | 2:
-        if self.leaf:
-            return self.rollout()
-
-        quality = (
-            torch.nan_to_num(self.num_wins / self.num_visits, nan=0.0) +
-            EXPLORE_COEFF * torch.sqrt(np.log(parent_visits) / (1 + self.num_visits))
-        )
-        quality[self.state.illegal_moves()] = float('-inf')
-
-        child_idx = quality.argmax()
-
-        self.num_visits[child_idx] += 1
-
-        if self.children[child_idx] is None:
-            self.children[child_idx] = Node(
-                self.state.step(child_idx)
-            )
-
-        winner = self.children[child_idx].search(self.num_visits[child_idx])
-
-        self.num_wins[child_idx] += int(winner == self.state.player)
-
-        if winner == 0 or self.state.winner is not None:
-            return winner
-
-        return 3 - winner
+        self.value: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
 
 
 class MCTS:
@@ -82,9 +41,57 @@ class MCTS:
 
         return self.root.num_visits.argmax()
 
+    @staticmethod
+    def rollout(node: Node) -> 0 | 1 | 2:
+        node.leaf = False
+        if node.winner is not None:
+            return node.winner
+
+        state = node.state
+        winner = state.winner()
+        while winner is None:
+            child_idx = np.random.choice(torch.where(~state.illegal_moves())[0])
+            state = state.step(child_idx)
+            winner = state.winner()
+
+        return winner
+
+    def search(self):
+        parent_visits = self.root_visits
+        node = self.root
+
+        while not node.leaf:
+            quality = (
+                    torch.nan_to_num(node.value / node.num_visits, nan=0.0) +
+                    EXPLORE_COEFF * torch.sqrt(np.log(parent_visits) / (1 + node.num_visits))
+            )
+            quality[node.state.illegal_moves()] = float('-inf')
+
+            child_idx = quality.argmax()
+            node.num_visits[child_idx] += 1
+
+            if node.children[child_idx] is None:
+                node.children[child_idx] = Node(
+                    state=node.state.step(child_idx),
+                    parent=node,
+                    action=child_idx
+                )
+
+            parent_visits = node.num_visits[child_idx]
+            node = node.children[child_idx]
+
+        winner = MCTS.rollout(node)
+
+        while node.parent is not None:
+            action = node.action
+            node = node.parent
+
+            node.value[action] += 2 * int(winner == node.state.player) - 1
+
     def run_simulations(self):
         for _ in range(self.sims_per_move):
-            self.root.search(self.root_visits)
+            self.search()
+            # self.root.search(self.root_visits)
 
     def step(self, action: int):
         if self.root.children[action] is None:
@@ -93,3 +100,4 @@ class MCTS:
         else:
             self.root_visits = self.root.num_visits[action]
             self.root = self.root.children[action]
+            self.root.parent = None
