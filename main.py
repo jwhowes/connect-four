@@ -1,19 +1,22 @@
 import click
+import warnings
 
 from src.mcts import MCTS
 
 @click.group()
 @click.pass_context
 def cli(ctx: click.Context):
+    warnings.simplefilter("ignore")
     ctx.ensure_object(dict)
 
 
 @cli.command()
 @click.option("--num-sims", type=int, default=1000)
-def play(num_sims):
+@click.option("--computer-first", is_flag=True)
+def play(num_sims, computer_first):
     mcts = MCTS(sims_per_move=num_sims)
 
-    player = True
+    player = not computer_first
     while mcts.root.state.winner() is None:
         mcts.root.state.display()
         if player:

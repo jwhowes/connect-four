@@ -1,2 +1,2 @@
-NUM_COLS = 6
-NUM_ROWS = 7
+NUM_COLS = 7
+NUM_ROWS = 6
