@@ -9,7 +9,6 @@ from .gym import State
 
 
 EXPLORE_COEFF = np.sqrt(2)
-NUM_THREADS = 4
 
 
 class Node:
