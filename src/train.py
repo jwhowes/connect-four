@@ -26,11 +26,13 @@ class TrainConfig(Config):
 
     batch_size: int = 16
     lr: float = 5e-5
+    steps_per_cycle: int = 500
 
 
 class Trainer:
     def __init__(
-            self, queue_size: int, batch_size: int, lr: float, sims_per_move: int, temperature: float,
+            self, queue_size: int, batch_size: int, lr: float, steps_per_cycle: int, sims_per_move: int,
+            temperature: float,
             data_dir: str, model_dir: str, model_config: ConvModelConfig, resume: bool = False, data_workers: int = 4
     ):
         self.queue_size = queue_size
@@ -40,6 +42,7 @@ class Trainer:
 
         self.batch_size = batch_size
         self.lr = lr
+        self.steps_per_cycle = steps_per_cycle
 
         self.data_dir = data_dir
         self.model_dir = model_dir
@@ -50,13 +53,11 @@ class Trainer:
         self.model_lock = Lock()
         self.data_lock = Lock()
 
-        self.shared_memory = ValueError
-
         self.timestamp = None
         if resume:
             for file in os.listdir(self.model_dir):
                 if os.path.splitext(file)[1] == ".pt":
-                    self.timestamp = Value('i', int(file))
+                    self.timestamp = Value('i', int(os.path.splitext(file)[0]))
                     break
 
             assert self.timestamp is not None, "No model found."
@@ -106,10 +107,6 @@ class Trainer:
         model = ConvModel.from_config(self.model_config)
         model.eval()
 
-        queue = [
-            os.path.join(self.data_dir, file) for file in os.listdir(self.data_dir)
-        ]
-
         data_timestamp = 0
         while True:
             with self.model_lock:
@@ -120,11 +117,13 @@ class Trainer:
             history = MCTS.self_play(self.sims_per_move, model, self.temperature)
 
             with self.data_lock:
-                if len(queue) >= self.queue_size:
-                    os.remove(queue.pop())
+                files = sorted([
+                    os.path.join(self.data_dir, file) for file in os.listdir(self.data_dir)
+                ])
+                if len(files) >= self.queue_size:
+                    os.remove(files[0])
 
-                queue = [os.path.join(self.data_dir, f"{timestamp()}.hist")] + queue
-                history.save(queue[0])
+                history.save(os.path.join(self.data_dir, f"{timestamp()}.hist"))
 
     @staticmethod
     def loss(pred_winner, prior, winner, mcts_prob) -> FloatTensor:
@@ -138,6 +137,7 @@ class Trainer:
         model.train()
 
         opt = torch.optim.Adam(model.parameters(), lr=self.lr)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, self.steps_per_cycle)
 
         with self.model_lock:
             self.load_model(model)
@@ -169,6 +169,7 @@ class Trainer:
 
                 loss.backward()
                 opt.step()
+                lr_scheduler.step()
 
                 pbar.set_description(f"Average Loss: {total_loss / (i + 1):.4f}")
 
