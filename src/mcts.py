@@ -19,13 +19,13 @@ MIXING_PARAMETER: float = 0.5
 
 class Node:
     def __init__(self, state: State, parent: Optional[Node] = None, action: int = -1):
-        self.leaf: bool = True
-
         self.state: State = state
         self.action: int = action
         self.parent: Optional[Node] = parent
 
         self.winner: Optional[0 | 1 | 2] = self.state.winner()
+
+        self.leaf = True
 
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
         self.prior: Optional[FloatTensor] = None
@@ -43,6 +43,11 @@ class GameHistory:
     mcts_probs: FloatTensor
     winner: int
 
+    def save(self, path: str):
+        torch.save(
+            self.__dict__, path
+        )
+
 
 class MCTS:
     def __init__(self, sims_per_move: int = 1000):
@@ -58,9 +63,10 @@ class MCTS:
 
     @staticmethod
     def rollout(node: Node) -> 0 | 1 | 2:
-        node.leaf = False
         if node.winner is not None:
             return node.winner
+
+        node.leaf = False
 
         state = node.state
         winner = state.winner()
@@ -95,7 +101,6 @@ class MCTS:
 
             node = node.children[child_idx]
 
-
         board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32).permute(0, 3, 1, 2)
         if node.state.player != 1:
             board = board[:, [0, 2, 1]]
@@ -103,6 +108,9 @@ class MCTS:
         model_winner, prior = model(board)
         model_winner = F.softmax(model_winner, dim=-1).squeeze(0)
         prior = F.softmax(prior, dim=-1).squeeze(0)
+
+        if node.state.player != 1:
+            model_winner = model_winner[[0, 2, 1]]
 
         node.prior = prior
         rollout_winner = MCTS.rollout(node)

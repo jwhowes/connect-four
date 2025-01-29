@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from torch import nn, FloatTensor
 from typing import Optional, Tuple
+from dataclasses import dataclass
 
 from .base import BaseModel
 from .. import NUM_COLS
+from ..util import Config
 
 
 class LayerNorm2d(nn.LayerNorm):
@@ -26,6 +30,13 @@ class Block(nn.Module):
 
     def forward(self, x: FloatTensor) -> FloatTensor:
         return x + self.module(x)
+
+
+@dataclass
+class ConvModelConfig(Config):
+    dims: Tuple[int, ...] = (64,)
+    depths: Tuple[int, ...] = (3,)
+    norm_eps: float = 1e-6
 
 
 class ConvModel(BaseModel):
