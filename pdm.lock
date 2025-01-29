@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:deeab9c04240cc11bb08855486f4da03996217eedca491486cb1b08d955eecc2"
+content_hash = "sha256:5f7426b6264f85a93bc9cb80f2699cef249ca72cdef674d6a5943ca62cc46551"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -71,17 +71,6 @@ dependencies = [
 files = [
     {file = "jinja2-3.1.5-py3-none-any.whl", hash = "sha256:aba0f4dc9ed8013c424088f68a5c226f7d6097ed89b246d7749c2ec4175c6adb"},
     {file = "jinja2-3.1.5.tar.gz", hash = "sha256:8fefff8dc3034e27bb80d67c671eb8a9bc424c0ef4c0826edbff304cceff43bb"},
-]
-
-[[package]]
-name = "joblib"
-version = "1.4.2"
-requires_python = ">=3.8"
-summary = "Lightweight pipelining with Python functions"
-groups = ["default"]
-files = [
-    {file = "joblib-1.4.2-py3-none-any.whl", hash = "sha256:06d478d5674cbc267e7496a410ee875abd68e4340feff4490bcb7afb88060ae6"},
-    {file = "joblib-1.4.2.tar.gz", hash = "sha256:2382c5816b2636fbd20a09e0f4e9dad4736765fdfb7dca582943b9c1366b3f0e"},
 ]
 
 [[package]]
