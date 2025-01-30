@@ -1,21 +1,22 @@
-import click
-import warnings
 import os
-
+import warnings
 from typing import Optional
-from src.model import ConvModelConfig
+
+import click
+
+from src.model import BaseModelConfig
 from src.play import Player
 from src.train import Trainer, TrainConfig
 
 
 @click.group()
-@click.argument("model_config", type=click.Path(dir_okay=False))
+@click.argument("model_config", type=click.Path(dir_okay=False, exists=True))
 @click.pass_context
 def cli(ctx: click.Context, model_config: str):
     warnings.simplefilter("ignore")
     ctx.ensure_object(dict)
 
-    ctx.obj["model_config"] = ConvModelConfig.from_yaml(model_config)
+    ctx.obj["model_config"] = BaseModelConfig.from_yaml(model_config)
     ctx.obj["model_dir"] = os.path.dirname(model_config)
 
     if not os.path.isdir(ctx.obj["model_dir"]):

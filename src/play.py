@@ -1,18 +1,17 @@
 import time
+from multiprocessing import Process, Event, Value
 from typing import Optional
 
 import torch
 
-from multiprocessing import Process, Event, Value
-
 from .gym import State
-from .model import ConvModel, ConvModelConfig
 from .mcts import MCTS
+from .model import BaseModelConfig
 
 
 class Player:
     def __init__(
-            self, model_config: ConvModelConfig, model_path: str, thinking_time: float, temperature: Optional[float],
+            self, model_config: BaseModelConfig, model_path: str, thinking_time: float, temperature: Optional[float],
             computer_first: bool = False
     ):
         self.user_input = Event()
@@ -32,7 +31,7 @@ class Player:
     def mcts_worker(self):
         mcts = MCTS()
 
-        model = ConvModel.from_config(self.model_config)
+        model: BaseModel = self.model_config.build_model()
         model.load_state_dict(torch.load(self.model_path, weights_only=True))
         model.eval()
         model.requires_grad_(False)

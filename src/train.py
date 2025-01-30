@@ -1,20 +1,20 @@
 from __future__ import annotations
 
+import os
 import time
+from dataclasses import dataclass
+from multiprocessing import Value, Lock, Process
+
 import torch
 import torch.nn.functional as F
-import os
-
-from multiprocessing import Value, Lock, Process
 from torch import FloatTensor
-from tqdm import tqdm
-from dataclasses import dataclass
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from .mcts import MCTS
-from .model import ConvModel, ConvModelConfig, BaseModel
-from .util import Config, timestamp
 from .data import GameHistoryDataset
+from .mcts import MCTS
+from .model import BaseModelConfig, BaseModel
+from .util import Config, timestamp
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Trainer:
     def __init__(
             self, queue_size: int, batch_size: int, lr: float, steps_per_cycle: int, sims_per_move: int,
             temperature: float,
-            data_dir: str, model_dir: str, model_config: ConvModelConfig, resume: bool = False, data_workers: int = 4
+            data_dir: str, model_dir: str, model_config: BaseModelConfig, resume: bool = False, data_workers: int = 4
     ):
         self.queue_size = queue_size
 
@@ -62,7 +62,7 @@ class Trainer:
 
             assert self.timestamp is not None, "No model found."
         else:
-            model = ConvModel.from_config(self.model_config)
+            model: BaseModel = self.model_config.build_model()
 
             to_remove = []
             for file in os.listdir(self.model_dir):
@@ -104,7 +104,7 @@ class Trainer:
         train_worker.join()
 
     def data_worker(self):
-        model = ConvModel.from_config(self.model_config)
+        model: BaseModel = self.model_config.build_model()
         model.eval()
 
         data_timestamp = 0
@@ -128,12 +128,12 @@ class Trainer:
     @staticmethod
     def loss(pred_winner, prior, winner, mcts_prob) -> FloatTensor:
         return (
-            F.cross_entropy(pred_winner, winner) +
-            -(mcts_prob * F.log_softmax(prior, dim=-1)).sum(-1).mean()
+                F.cross_entropy(pred_winner, winner) +
+                -(mcts_prob * F.log_softmax(prior, dim=-1)).sum(-1).mean()
         )
 
     def train_worker(self):
-        model = ConvModel.from_config(self.model_config)
+        model: BaseModel = self.model_config.build_model()
         model.train()
 
         opt = torch.optim.Adam(model.parameters(), lr=self.lr)

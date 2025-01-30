@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import torch
-import torch.nn.functional as F
-
-from torch import LongTensor, BoolTensor
 from dataclasses import dataclass
 from typing import Optional
+
+import torch
+import torch.nn.functional as F
+from torch import LongTensor, BoolTensor
 
 from . import NUM_COLS, NUM_ROWS
 

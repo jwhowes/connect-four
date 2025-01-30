@@ -1,7 +1,7 @@
 import os
+
 import torch
 import torch.nn.functional as F
-
 from torch.utils.data import Dataset
 
 
@@ -29,12 +29,12 @@ class GameHistoryDataset(Dataset):
         return self.boards.shape[0]
 
     def __getitem__(self, idx):
-        board = F.one_hot(self.boards[idx], num_classes=3).permute(2, 0, 1).to(torch.float32)
+        board = F.one_hot(self.boards[idx], num_classes=3).to(torch.float32)
         player = self.players[idx]
         winner = self.winners[idx]
 
         if player != 1:
-            board = board[[0, 2, 1]]
+            board = board[:, :, [0, 2, 1]]
 
             if winner != 0:
                 winner = 3 - winner

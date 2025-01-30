@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Optional, List
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-
 from torch import LongTensor, FloatTensor
-from typing import Optional, List
-from dataclasses import dataclass
 
 from . import NUM_COLS
-from .model import BaseModel
 from .gym import State
-
+from .model import BaseModel
 
 EXPLORE_COEFF: float = 5.0
 MIXING_PARAMETER: float = 0.5
@@ -76,9 +75,9 @@ class MCTS:
 
         while not node.leaf:
             quality = (
-                (1 - MIXING_PARAMETER) * torch.nan_to_num(node.rollout_value / node.num_visits, nan=0.0) +
-                MIXING_PARAMETER * torch.nan_to_num(node.model_value / node.num_visits, nan=0.0) +
-                EXPLORE_COEFF * node.prior * torch.sqrt(node.num_visits.sum()) / (1 + node.num_visits)
+                    (1 - MIXING_PARAMETER) * torch.nan_to_num(node.rollout_value / node.num_visits, nan=0.0) +
+                    MIXING_PARAMETER * torch.nan_to_num(node.model_value / node.num_visits, nan=0.0) +
+                    EXPLORE_COEFF * node.prior * torch.sqrt(node.num_visits.sum()) / (1 + node.num_visits)
             )
             quality[node.state.illegal_moves()] = float('-inf')
 
@@ -94,9 +93,9 @@ class MCTS:
 
             node = node.children[child_idx]
 
-        board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32).permute(0, 3, 1, 2)
+        board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32)
         if node.state.player != 1:
-            board = board[:, [0, 2, 1]]
+            board = board[:, :, :, [0, 2, 1]]
 
         model_winner, prior = model(board)
         model_winner = F.softmax(model_winner, dim=-1).squeeze(0)
