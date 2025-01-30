@@ -82,9 +82,9 @@ def play(ctx, num_sims, computer_first):
     if winner == 0:
         print("It's a tie!")
     elif winner == 1:
-        print("Player wins!")
+        print("Player wins!" if not computer_first else "Computer wins!")
     else:
-        print("Computer wins!")
+        print("Computer wins!" if computer_first else "Player wins!")
 
 
 if __name__ == "__main__":
