@@ -50,16 +50,9 @@ class GameHistory:
 
 
 class MCTS:
-    def __init__(self, sims_per_move: int = 1000):
-        self.sims_per_move: int = sims_per_move
-
+    def __init__(self):
         self.root: Node = Node(State.initial())
         self.root_visits: int = 1
-
-    def get_move(self) -> int:
-        self.run_simulations()
-
-        return self.root.num_visits.argmax()
 
     @staticmethod
     def rollout(node: Node) -> 0 | 1 | 2:
@@ -127,13 +120,13 @@ class MCTS:
         model.eval()
         model.requires_grad_(False)
 
-        mcts = MCTS(sims_per_move=sims_per_move)
+        mcts = MCTS()
 
         players: List[int] = []
         boards: List[LongTensor] = []
         mcts_probs: List[FloatTensor] = []
         while mcts.root.winner is None:
-            mcts.run_simulations(model)
+            mcts.run_simulations(model, sims_per_move)
 
             likelihood = mcts.root.num_visits ** (1 / temperature)
             mcts_prob = likelihood / likelihood.sum()
@@ -152,8 +145,8 @@ class MCTS:
             winner=mcts.root.winner
         )
 
-    def run_simulations(self, model: BaseModel):
-        for _ in range(self.sims_per_move):
+    def run_simulations(self, model: BaseModel, num_sims: int):
+        for _ in range(num_sims):
             self.search(model)
 
     def step(self, action: int):

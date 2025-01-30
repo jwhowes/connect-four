@@ -10,7 +10,7 @@ from .mcts import MCTS
 
 class Player:
     def __init__(
-            self, model_config: ConvModelConfig, model_path: str, thinking_time: float, sims_per_move: int,
+            self, model_config: ConvModelConfig, model_path: str, thinking_time: float,
             computer_first: bool = False
     ):
         self.user_input = Event()
@@ -24,11 +24,10 @@ class Player:
         self.model_path = model_path
 
         self.thinking_time = thinking_time
-        self.sims_per_move = sims_per_move
         self.computer_first = computer_first
 
     def mcts_worker(self):
-        mcts = MCTS(sims_per_move=self.sims_per_move)
+        mcts = MCTS()
 
         model = ConvModel.from_config(self.model_config)
         model.load_state_dict(torch.load(self.model_path, weights_only=True))

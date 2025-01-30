@@ -49,7 +49,7 @@ def train(ctx: click.Context, train_config: Optional[str], resume: bool, data_di
 
 
 @cli.command()
-@click.option("--thinking-time", type=float, default=4.0)
+@click.option("--thinking-time", type=float, default=3.0)
 @click.option("--computer-first", is_flag=True)
 @click.pass_context
 def play(ctx, thinking_time, computer_first):
