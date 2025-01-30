@@ -29,7 +29,7 @@ def cli(ctx: click.Context, exp_dir: str):
 @click.option("--data-workers", type=int, default=4)
 @click.pass_context
 def train(ctx: click.Context, resume: bool, data_dir: str, data_workers: int):
-    train_config_path = os.path.join(ctx.obj["model_dir"], "train.config")
+    train_config_path = os.path.join(ctx.obj["model_dir"], "train.yaml")
     if not os.path.exists(train_config_path):
         train_config = TrainConfig()
     else:
