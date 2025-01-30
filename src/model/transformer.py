@@ -11,34 +11,6 @@ from . import BaseModel
 from .. import NUM_ROWS, NUM_COLS
 from ..util import Config
 
-
-class RMSNorm(nn.Module):
-    def __init__(self, d_model: int, eps: float = 1e-6):
-        super(RMSNorm, self).__init__()
-        self.eps = eps
-
-        self.weight = nn.Parameter(torch.empty(d_model).normal_(mean=1.0, std=sqrt(1 / d_model)))
-
-    def forward(self, x: FloatTensor) -> FloatTensor:
-        return self.weight * x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-
-class SwiGLU(nn.Module):
-    def __init__(self, d_model: int, d_hidden: Optional[int] = None):
-        super(SwiGLU, self).__init__()
-        if d_hidden is None:
-            d_hidden = 4 * d_model
-
-        self.gate = nn.Linear(d_model, d_hidden, bias=False)
-        self.hidden = nn.Linear(d_model, d_hidden, bias=False)
-        self.out = nn.Linear(d_hidden, d_model)
-
-    def forward(self, x: FloatTensor) -> FloatTensor:
-        return self.out(
-            F.silu(self.gate(x)) * self.hidden(x)
-        )
-
-
 class Attention(nn.Module):
     def __init__(self, d_model: int, n_heads: int):
         super(Attention, self).__init__()
@@ -68,11 +40,17 @@ class Attention(nn.Module):
 class Block(nn.Module):
     def __init__(self, d_model: int, n_heads: int, d_hidden: Optional[int] = None, norm_eps: float = 1e-6):
         super(Block, self).__init__()
+        if d_hidden is None:
+            d_hidden = 4 * d_model
         self.attn = Attention(d_model, n_heads)
-        self.attn_norm = RMSNorm(d_model, eps=norm_eps)
+        self.attn_norm = nn.LayerNorm(d_model, eps=norm_eps)
 
-        self.ffn = SwiGLU(d_model, d_hidden)
-        self.ffn_norm = RMSNorm(d_model, eps=norm_eps)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, d_hidden),
+            nn.GELU(),
+            nn.Linear(d_hidden, d_model)
+        )
+        self.ffn_norm = nn.LayerNorm(d_model, eps=norm_eps)
 
     def forward(self, x: FloatTensor) -> FloatTensor:
         x = x + self.attn(self.attn_norm(x))
@@ -100,12 +78,12 @@ class Transformer(BaseModel):
         ])
 
         self.winner_head = nn.Sequential(
-            RMSNorm(d_model, eps=norm_eps),
+            nn.LayerNorm(d_model, eps=norm_eps),
             nn.Linear(d_model, 3)
         )
 
         self.action_head = nn.Sequential(
-            RMSNorm(d_model, eps=norm_eps),
+            nn.LayerNorm(d_model, eps=norm_eps),
             nn.Linear(d_model, NUM_COLS)
         )
 
