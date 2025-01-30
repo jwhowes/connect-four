@@ -126,7 +126,8 @@ class MCTS:
         boards: List[LongTensor] = []
         mcts_probs: List[FloatTensor] = []
         while mcts.root.winner is None:
-            mcts.run_simulations(model, sims_per_move)
+            for _ in range(sims_per_move):
+                mcts.search(model)
 
             likelihood = mcts.root.num_visits ** (1 / temperature)
             mcts_prob = likelihood / likelihood.sum()
@@ -144,10 +145,6 @@ class MCTS:
             mcts_probs=torch.stack(mcts_probs),
             winner=mcts.root.winner
         )
-
-    def run_simulations(self, model: BaseModel, num_sims: int):
-        for _ in range(num_sims):
-            self.search(model)
 
     def step(self, action: int):
         if self.root.children[action] is None:
