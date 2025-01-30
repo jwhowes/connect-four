@@ -23,7 +23,7 @@ class State:
     player: 1 | 2
 
     def display(self):
-        print("\n".join([
+        print("\n\n".join([
             "\t".join([
                 str(p.item()) for p in row
             ]) for row in self.board.flip(0)

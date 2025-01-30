@@ -1,73 +1,52 @@
+from __future__ import annotations
+
 import torch
+import torch.nn.functional as F
 import numpy as np
 
-from torch import LongTensor
+from torch import LongTensor, FloatTensor
 from typing import Optional, List
+from dataclasses import dataclass
 
 from . import NUM_COLS
+from .model import BaseModel
 from .gym import State
 
 
-EXPLORE_COEFF = np.sqrt(2)
+EXPLORE_COEFF: float = 5.0
+MIXING_PARAMETER: float = 0.5
 
 
 class Node:
-    def __init__(self, state: State):
-        self.leaf: bool = True
-
+    def __init__(self, state: State, parent: Optional[Node] = None, action: int = -1):
         self.state: State = state
+        self.action: int = action
+        self.parent: Optional[Node] = parent
 
         self.winner: Optional[0 | 1 | 2] = self.state.winner()
 
+        self.leaf = True
+
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
+        self.prior: Optional[FloatTensor] = None
 
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
-        self.num_wins: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
+        self.rollout_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
+        self.model_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
 
-    def rollout(self) -> 0 | 1 | 2:
-        self.leaf = False
-        if self.winner is not None:
-            return self.winner
 
-        child_idx = np.random.choice(torch.where(~self.state.illegal_moves())[0])
+@dataclass
+class GameHistory:
+    boards: LongTensor
+    players: LongTensor
 
-        self.num_visits[child_idx] = 1
-        self.children[child_idx] = Node(
-            self.state.step(child_idx)
+    mcts_probs: FloatTensor
+    winner: int
+
+    def save(self, path: str):
+        torch.save(
+            self.__dict__, path
         )
-
-        winner = self.children[child_idx].rollout()
-
-        self.num_wins[child_idx] += int(winner == self.state.player)
-        return winner
-
-    def search(self, parent_visits: int = 1) -> 0 | 1 | 2:
-        if self.leaf:
-            return self.rollout()
-
-        quality = (
-            torch.nan_to_num(self.num_wins / self.num_visits, nan=0.0) +
-            EXPLORE_COEFF * torch.sqrt(np.log(parent_visits) / (1 + self.num_visits))
-        )
-        quality[self.state.illegal_moves()] = float('-inf')
-
-        child_idx = quality.argmax()
-
-        self.num_visits[child_idx] += 1
-
-        if self.children[child_idx] is None:
-            self.children[child_idx] = Node(
-                self.state.step(child_idx)
-            )
-
-        winner = self.children[child_idx].search(self.num_visits[child_idx])
-
-        self.num_wins[child_idx] += int(winner == self.state.player)
-
-        if winner == 0 or self.state.winner is not None:
-            return winner
-
-        return 3 - winner
 
 
 class MCTS:
@@ -82,9 +61,100 @@ class MCTS:
 
         return self.root.num_visits.argmax()
 
-    def run_simulations(self):
+    @staticmethod
+    def rollout(node: Node) -> 0 | 1 | 2:
+        if node.winner is not None:
+            return node.winner
+
+        node.leaf = False
+
+        state = node.state
+        winner = state.winner()
+        while winner is None:
+            child_idx = np.random.choice(torch.where(~state.illegal_moves())[0])
+            state = state.step(child_idx)
+            winner = state.winner()
+
+        return winner
+
+    @torch.inference_mode()
+    def search(self, model: BaseModel):
+        node = self.root
+
+        while not node.leaf:
+            quality = (
+                (1 - MIXING_PARAMETER) * torch.nan_to_num(node.rollout_value / node.num_visits, nan=0.0) +
+                MIXING_PARAMETER * torch.nan_to_num(node.model_value / node.num_visits, nan=0.0) +
+                EXPLORE_COEFF * node.prior * torch.sqrt(node.num_visits.sum()) / (1 + node.num_visits)
+            )
+            quality[node.state.illegal_moves()] = float('-inf')
+
+            child_idx = quality.argmax()
+            node.num_visits[child_idx] += 1
+
+            if node.children[child_idx] is None:
+                node.children[child_idx] = Node(
+                    state=node.state.step(child_idx),
+                    parent=node,
+                    action=child_idx
+                )
+
+            node = node.children[child_idx]
+
+        board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32).permute(0, 3, 1, 2)
+        if node.state.player != 1:
+            board = board[:, [0, 2, 1]]
+
+        model_winner, prior = model(board)
+        model_winner = F.softmax(model_winner, dim=-1).squeeze(0)
+        prior = F.softmax(prior, dim=-1).squeeze(0)
+
+        if node.state.player != 1:
+            model_winner = model_winner[[0, 2, 1]]
+
+        node.prior = prior
+        rollout_winner = MCTS.rollout(node)
+
+        while node.parent is not None:
+            action = node.action
+            node = node.parent
+
+            node.rollout_value[action] += 2 * int(rollout_winner == node.state.player) - 1
+            node.model_value[action] += 2 * model_winner[node.state.player] - 1
+
+    @staticmethod
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
+        model.eval()
+        model.requires_grad_(False)
+
+        mcts = MCTS(sims_per_move=sims_per_move)
+
+        players: List[int] = []
+        boards: List[LongTensor] = []
+        mcts_probs: List[FloatTensor] = []
+        while mcts.root.winner is None:
+            mcts.run_simulations(model)
+
+            likelihood = mcts.root.num_visits ** (1 / temperature)
+            mcts_prob = likelihood / likelihood.sum()
+
+            mcts_probs.append(mcts_prob)
+            boards.append(mcts.root.state.board)
+            players.append(mcts.root.state.player)
+
+            action = torch.multinomial(mcts_prob, 1)[0]
+            mcts.step(action)
+
+        return GameHistory(
+            boards=torch.stack(boards),
+            players=torch.tensor(players, dtype=torch.long),
+            mcts_probs=torch.stack(mcts_probs),
+            winner=mcts.root.winner
+        )
+
+    def run_simulations(self, model: BaseModel):
         for _ in range(self.sims_per_move):
-            self.root.search(self.root_visits)
+            self.search(model)
 
     def step(self, action: int):
         if self.root.children[action] is None:
@@ -93,3 +163,4 @@ class MCTS:
         else:
             self.root_visits = self.root.num_visits[action]
             self.root = self.root.children[action]
+            self.root.parent = None
