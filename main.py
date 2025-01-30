@@ -1,7 +1,6 @@
 import click
 import warnings
 import os
-import torch
 
 from typing import Optional
 from src.model import ConvModelConfig
