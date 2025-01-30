@@ -10,14 +10,14 @@ from src.train import Trainer, TrainConfig
 
 
 @click.group()
-@click.argument("model_config", type=click.Path(dir_okay=False, exists=True))
+@click.argument("exp_dir", type=click.Path(file_okay=False, exists=True))
 @click.pass_context
-def cli(ctx: click.Context, model_config: str):
+def cli(ctx: click.Context, exp_dir: str):
     warnings.simplefilter("ignore")
     ctx.ensure_object(dict)
 
-    ctx.obj["model_config"] = BaseModelConfig.from_yaml(model_config)
-    ctx.obj["model_dir"] = os.path.dirname(model_config)
+    ctx.obj["model_config"] = BaseModelConfig.from_yaml(os.path.join(exp_dir, "model.yaml"))
+    ctx.obj["model_dir"] = exp_dir
 
     if not os.path.isdir(ctx.obj["model_dir"]):
         os.makedirs(ctx.obj["model_dir"])
