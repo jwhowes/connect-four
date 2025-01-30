@@ -25,7 +25,7 @@ def cli(ctx: click.Context, exp_dir: str):
 
 @cli.command()
 @click.option("--resume", is_flag=True)
-@click.option("--data-dir", type=click.Path(), default="data")
+@click.option("--data-dir", type=click.Path(file_okay=False, exists=True), default="data")
 @click.option("--data-workers", type=int, default=4)
 @click.pass_context
 def train(ctx: click.Context, resume: bool, data_dir: str, data_workers: int):
