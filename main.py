@@ -24,16 +24,16 @@ def cli(ctx: click.Context, model_config: str):
 
 
 @cli.command()
-@click.option("--train-config", type=click.Path(dir_okay=False), required=False)
 @click.option("--resume", is_flag=True)
 @click.option("--data-dir", type=click.Path(), default="data")
 @click.option("--data-workers", type=int, default=4)
 @click.pass_context
-def train(ctx: click.Context, train_config: Optional[str], resume: bool, data_dir: str, data_workers: int):
-    if train_config is None:
+def train(ctx: click.Context, resume: bool, data_dir: str, data_workers: int):
+    train_config_path = os.path.join(ctx.obj["model_dir"], "train.config")
+    if not os.path.exists(train_config_path):
         train_config = TrainConfig()
     else:
-        train_config = TrainConfig.from_yaml(train_config)
+        train_config = TrainConfig.from_yaml(train_config_path)
 
     trainer = Trainer(
         **train_config.__dict__,
