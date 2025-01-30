@@ -35,6 +35,8 @@ class GameHistoryDataset(Dataset):
 
         if player != 1:
             board = board[[0, 2, 1]]
-            winner = 3 - winner
+
+            if winner != 0:
+                winner = 3 - winner
 
         return board, self.mcts_probs[idx], winner
