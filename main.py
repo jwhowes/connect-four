@@ -6,6 +6,7 @@ import torch
 from typing import Optional
 from src.mcts import MCTS
 from src.model import ConvModel, ConvModelConfig
+from src.play import Player
 from src.train import Trainer, TrainConfig
 
 
@@ -48,43 +49,18 @@ def train(ctx: click.Context, train_config: Optional[str], resume: bool, data_di
 
 
 @cli.command()
-@click.option("--num-sims", type=int, default=1000)
+@click.option("--thinking-time", type=int, default=5)
 @click.option("--computer-first", is_flag=True)
 @click.pass_context
-def play(ctx, num_sims, computer_first):
-    mcts = MCTS(sims_per_move=num_sims)
-
-    model = ConvModel.from_config(ctx.obj["model_config"])
-
+def play(ctx, thinking_time, computer_first):
     filename = None
     for file in os.listdir(ctx.obj["model_dir"]):
         if os.path.splitext(file)[1] == ".pt":
             filename = os.path.join(ctx.obj["model_dir"], file)
 
-    assert filename is not None, "No model found."
-    model.load_state_dict(torch.load(filename, weights_only=True))
 
-    player = not computer_first
-    while mcts.root.state.winner() is None:
-        mcts.root.state.display()
-        if player:
-            action = int(input("Enter your move: "))
-        else:
-            mcts.run_simulations(model)
-            action = mcts.root.num_visits.argmax()
-            print(f"Computer move: {int(action)}")
-
-        mcts.step(action)
-        player = not player
-
-    mcts.root.state.display()
-    winner = mcts.root.state.winner()
-    if winner == 0:
-        print("It's a tie!")
-    elif winner == 1:
-        print("Computer wins!" if computer_first else "Player wins!")
-    else:
-        print("Player wins!" if computer_first else "Computer wins!")
+    player = Player(ctx.obj["model_config"], filename, thinking_time, computer_first)
+    player.play()
 
 
 if __name__ == "__main__":
