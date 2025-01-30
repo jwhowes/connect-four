@@ -1,4 +1,6 @@
 import time
+from typing import Optional
+
 import torch
 
 from multiprocessing import Process, Event, Value
@@ -10,7 +12,7 @@ from .mcts import MCTS
 
 class Player:
     def __init__(
-            self, model_config: ConvModelConfig, model_path: str, thinking_time: float,
+            self, model_config: ConvModelConfig, model_path: str, thinking_time: float, temperature: Optional[float],
             computer_first: bool = False
     ):
         self.user_input = Event()
@@ -24,6 +26,7 @@ class Player:
         self.model_path = model_path
 
         self.thinking_time = thinking_time
+        self.temperature = temperature
         self.computer_first = computer_first
 
     def mcts_worker(self):
@@ -46,7 +49,12 @@ class Player:
             if not player and self.computer_output_request.is_set():
                 player = True
                 self.computer_output_request.clear()
-                action = mcts.root.num_visits.argmax()
+
+                if self.temperature is None:
+                    action = mcts.root.num_visits.argmax()
+                else:
+                    likelihood = mcts.root.num_visits ** (1 / self.temperature)
+                    action = torch.multinomial(likelihood / likelihood.sum(), 1)[0]
 
                 self.action.value = int(action)
                 self.computer_output_sent.set()

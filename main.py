@@ -4,14 +4,13 @@ import os
 import torch
 
 from typing import Optional
-from src.mcts import MCTS
-from src.model import ConvModel, ConvModelConfig
+from src.model import ConvModelConfig
 from src.play import Player
 from src.train import Trainer, TrainConfig
 
 
 @click.group()
-@click.argument("model_config", type=click.Path())
+@click.argument("model_config", type=click.Path(dir_okay=False))
 @click.pass_context
 def cli(ctx: click.Context, model_config: str):
     warnings.simplefilter("ignore")
@@ -25,7 +24,7 @@ def cli(ctx: click.Context, model_config: str):
 
 
 @cli.command()
-@click.option("--train-config", type=click.Path(), required=False)
+@click.option("--train-config", type=click.Path(dir_okay=False), required=False)
 @click.option("--resume", is_flag=True)
 @click.option("--data-dir", type=click.Path(), default="data")
 @click.option("--data-workers", type=int, default=4)
@@ -50,16 +49,16 @@ def train(ctx: click.Context, train_config: Optional[str], resume: bool, data_di
 
 @cli.command()
 @click.option("--thinking-time", type=float, default=3.0)
+@click.option("--temperature", type=click.FloatRange(0, min_open=True), default=None)
 @click.option("--computer-first", is_flag=True)
 @click.pass_context
-def play(ctx, thinking_time, computer_first):
+def play(ctx, thinking_time: float, temperature: Optional[float], computer_first: bool):
     filename = None
     for file in os.listdir(ctx.obj["model_dir"]):
         if os.path.splitext(file)[1] == ".pt":
             filename = os.path.join(ctx.obj["model_dir"], file)
 
-
-    player = Player(ctx.obj["model_config"], filename, thinking_time, computer_first)
+    player = Player(ctx.obj["model_config"], filename, thinking_time, temperature, computer_first)
     player.play()
 
 
