@@ -125,13 +125,6 @@ class Trainer:
 
                 history.save(os.path.join(self.data_dir, f"{timestamp()}.hist"))
 
-    @staticmethod
-    def loss(pred_winner, prior, winner, mcts_prob) -> FloatTensor:
-        return (
-                F.cross_entropy(pred_winner, winner) +
-                -(mcts_prob * F.log_softmax(prior, dim=-1)).sum(-1).mean()
-        )
-
     def train_worker(self):
         model: BaseModel = self.model_config.build_model()
         model.train()
@@ -159,11 +152,11 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, mcts_prob, winner) in pbar:
+            for i, (board, mcts_prob) in pbar:
                 opt.zero_grad()
 
-                pred_winner, prior = model(board)
-                loss = self.loss(pred_winner, prior, winner, mcts_prob)
+                prior = model(board)
+                loss = -(mcts_prob * F.log_softmax(prior, dim=-1)).sum(-1).mean()
 
                 total_loss += loss.item()
 
@@ -175,5 +168,3 @@ class Trainer:
 
             with self.model_lock:
                 self.save_model(model)
-
-            time.sleep(1)

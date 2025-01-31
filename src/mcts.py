@@ -52,9 +52,9 @@ class MCTS:
         self.root_visits: int = 1
 
     def policy(self, temperature: float) -> FloatTensor:
-        quality = torch.nan_to_num(self.root.value / self.root.num_visits, nan=float('-inf'))
+        likelihood = self.root.num_visits ** (1.0 / temperature)
 
-        return F.softmax(quality / temperature, dim=-1)
+        return F.normalize(likelihood, dim=-1, p=1)
 
     @staticmethod
     def rollout(node: Node) -> 0 | 1 | 2:
