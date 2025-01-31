@@ -7,7 +7,6 @@ from multiprocessing import Value, Lock, Process
 
 import torch
 import torch.nn.functional as F
-from torch import FloatTensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 

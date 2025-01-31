@@ -112,7 +112,7 @@ class MCTS:
             node.value[action] += int(rollout_winner == node.state.player) - int(rollout_winner == 3 - node.state.player)
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
