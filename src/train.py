@@ -21,7 +21,7 @@ class TrainConfig(Config):
     queue_size: int = 16
 
     sims_per_move: int = 250
-    temperature: float = 1.0
+    temperature: float = 0.1
 
     batch_size: int = 16
     lr: float = 5e-5

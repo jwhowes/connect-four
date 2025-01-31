@@ -52,9 +52,9 @@ class MCTS:
         self.root_visits: int = 1
 
     def policy(self, temperature: float) -> FloatTensor:
-        likelihood = self.root.num_visits ** (1.0 / temperature)
-
-        return F.normalize(likelihood, dim=-1, p=1)
+        return F.softmax(
+            torch.nan_to_num(self.root.value / self.root.num_visits, nan=float('-inf')) / temperature, dim=-1
+        )
 
     @staticmethod
     def rollout(node: Node) -> 0 | 1 | 2:
@@ -112,7 +112,7 @@ class MCTS:
             node.value[action] += int(rollout_winner == node.state.player) - int(rollout_winner == 3 - node.state.player)
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
