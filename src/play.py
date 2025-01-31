@@ -6,7 +6,7 @@ import torch
 
 from .gym import State
 from .mcts import MCTS
-from .model import BaseModelConfig
+from .model import BaseModelConfig, BaseModel
 
 
 class Player:
@@ -49,11 +49,11 @@ class Player:
                 player = True
                 self.computer_output_request.clear()
 
+                policy = mcts.policy(self.temperature if self.temperature is not None else 0.1)
                 if self.temperature is None:
-                    action = mcts.root.num_visits.argmax()
+                    action = policy.argmax()
                 else:
-                    likelihood = mcts.root.num_visits ** (1 / self.temperature)
-                    action = torch.multinomial(likelihood / likelihood.sum(), 1)[0]
+                    action = torch.multinomial(policy, 1)[0]
 
                 self.action.value = int(action)
                 self.computer_output_sent.set()

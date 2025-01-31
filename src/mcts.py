@@ -53,6 +53,14 @@ class MCTS:
         self.root: Node = Node(State.initial())
         self.root_visits: int = 1
 
+    def policy(self, temperature: float) -> FloatTensor:
+        quality = (
+                (1 - MIXING_PARAMETER) * torch.nan_to_num(self.root.rollout_value / self.root.num_visits, nan=float('-inf')) +
+                MIXING_PARAMETER * torch.nan_to_num(self.root.model_value / self.root.num_visits, nan=float('-inf'))
+        )
+
+        return F.softmax(quality / temperature, dim=-1)
+
     @staticmethod
     def rollout(node: Node) -> 0 | 1 | 2:
         if node.winner is not None:
@@ -111,11 +119,11 @@ class MCTS:
             action = node.action
             node = node.parent
 
-            node.rollout_value[action] += 2 * int(rollout_winner == node.state.player) - 1
-            node.model_value[action] += 2 * model_winner[node.state.player] - 1
+            node.rollout_value[action] += int(rollout_winner == node.state.player) - int(rollout_winner == 3 - node.state.player)
+            node.model_value[action] += model_winner[node.state.player] - model_winner[3 - node.state.player]
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
@@ -128,8 +136,7 @@ class MCTS:
             for _ in range(sims_per_move):
                 mcts.search(model)
 
-            likelihood = mcts.root.num_visits ** (1 / temperature)
-            mcts_prob = likelihood / likelihood.sum()
+            mcts_prob = mcts.policy(temperature)
 
             mcts_probs.append(mcts_prob)
             boards.append(mcts.root.state.board)
