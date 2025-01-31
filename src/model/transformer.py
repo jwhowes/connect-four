@@ -66,9 +66,6 @@ class Transformer(BaseModel):
         self.pos_emb = nn.Parameter(
             torch.empty(1, NUM_ROWS, NUM_COLS, d_model).normal_(std=sqrt(1 / d_model))
         )
-        self.winner_emb = nn.Parameter(
-            torch.empty(1, 1, d_model).normal_(std=sqrt(1 / d_model))
-        )
         self.action_emb = nn.Parameter(
             torch.empty(1, 1, d_model).normal_(std=sqrt(1 / d_model))
         )
@@ -77,27 +74,21 @@ class Transformer(BaseModel):
             Block(d_model, n_heads, norm_eps=norm_eps) for _ in range(n_layers)
         ])
 
-        self.winner_head = nn.Sequential(
-            nn.LayerNorm(d_model, eps=norm_eps),
-            nn.Linear(d_model, 3)
-        )
-
         self.action_head = nn.Sequential(
             nn.LayerNorm(d_model, eps=norm_eps),
             nn.Linear(d_model, NUM_COLS)
         )
 
-    def forward(self, board: FloatTensor) -> Tuple[FloatTensor, FloatTensor]:
+    def forward(self, board: FloatTensor) -> FloatTensor:
         B = board.shape[0]
         x = torch.concatenate((
-            self.winner_emb.expand(B, -1, -1),
             self.action_emb.expand(B, -1, -1),
             (self.pos_emb + self.emb(board)).flatten(1, 2)
         ), dim=1)
 
         x = self.layers(x)
 
-        return self.winner_head(x[:, 0]), self.action_head(x[:, 1])
+        return self.action_head(x[:, 1])
 
 
 @dataclass

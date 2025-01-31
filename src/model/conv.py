@@ -52,20 +52,14 @@ class ConvModel(BaseModel):
         ]
         self.layers = nn.Sequential(*layers, nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
 
-        self.winner_head = nn.Sequential(
-            nn.LayerNorm(dims[-1], eps=norm_eps),
-            nn.GELU(),
-            nn.Linear(dims[-1], 3)
-        )
-
         self.action_head = nn.Sequential(
             nn.LayerNorm(dims[-1], eps=norm_eps),
             nn.GELU(),
             nn.Linear(dims[-1], NUM_COLS)
         )
 
-    def forward(self, board: FloatTensor) -> Tuple[FloatTensor, FloatTensor]:
+    def forward(self, board: FloatTensor) -> FloatTensor:
         x = self.emb(board.permute(0, 3, 1, 2))
         x = self.layers(x)
 
-        return self.winner_head(x), self.action_head(x)
+        return self.action_head(x)

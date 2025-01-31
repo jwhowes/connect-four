@@ -13,7 +13,6 @@ from .gym import State
 from .model import BaseModel
 
 EXPLORE_COEFF: float = 5.0
-MIXING_PARAMETER: float = 0.5
 
 
 class Node:
@@ -30,8 +29,7 @@ class Node:
         self.prior: Optional[FloatTensor] = None
 
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
-        self.rollout_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
-        self.model_value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
+        self.value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
 
 
 @dataclass
@@ -54,10 +52,7 @@ class MCTS:
         self.root_visits: int = 1
 
     def policy(self, temperature: float) -> FloatTensor:
-        quality = (
-                (1 - MIXING_PARAMETER) * torch.nan_to_num(self.root.rollout_value / self.root.num_visits, nan=float('-inf')) +
-                MIXING_PARAMETER * torch.nan_to_num(self.root.model_value / self.root.num_visits, nan=float('-inf'))
-        )
+        quality = torch.nan_to_num(self.root.value / self.root.num_visits, nan=float('-inf'))
 
         return F.softmax(quality / temperature, dim=-1)
 
@@ -83,8 +78,7 @@ class MCTS:
 
         while not node.leaf:
             quality = (
-                    (1 - MIXING_PARAMETER) * torch.nan_to_num(node.rollout_value / node.num_visits, nan=0.0) +
-                    MIXING_PARAMETER * torch.nan_to_num(node.model_value / node.num_visits, nan=0.0) +
+                    torch.nan_to_num(node.value / node.num_visits, nan=0.0) +
                     EXPLORE_COEFF * node.prior * torch.sqrt(node.num_visits.sum()) / (1 + node.num_visits)
             )
             quality[node.state.illegal_moves()] = float('-inf')
@@ -105,12 +99,8 @@ class MCTS:
         if node.state.player != 1:
             board = board[:, :, :, [0, 2, 1]]
 
-        model_winner, prior = model(board)
-        model_winner = F.softmax(model_winner, dim=-1).squeeze(0)
+        prior = model(board)
         prior = F.softmax(prior, dim=-1).squeeze(0)
-
-        if node.state.player != 1:
-            model_winner = model_winner[[0, 2, 1]]
 
         node.prior = prior
         rollout_winner = MCTS.rollout(node)
@@ -119,8 +109,7 @@ class MCTS:
             action = node.action
             node = node.parent
 
-            node.rollout_value[action] += int(rollout_winner == node.state.player) - int(rollout_winner == 3 - node.state.player)
-            node.model_value[action] += model_winner[node.state.player] - model_winner[3 - node.state.player]
+            node.value[action] += int(rollout_winner == node.state.player) - int(rollout_winner == 3 - node.state.player)
 
     @staticmethod
     def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
