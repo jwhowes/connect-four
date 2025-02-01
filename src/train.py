@@ -153,11 +153,11 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, quality, legal) in pbar:
+            for i, (board, value, legal) in pbar:
                 opt.zero_grad()
 
                 pred = model(board)
-                loss = F.mse_loss(pred, quality, reduction='none')
+                loss = F.mse_loss(pred, value, reduction='none')
                 loss = loss[legal].mean()
 
                 total_loss += loss.item()
