@@ -21,7 +21,8 @@ class TrainConfig(Config):
     queue_size: int = 16
 
     sims_per_move: int = 250
-    temperature: float = 0.1
+    temperature: float = 1.0
+    gamma: float = 0.99
 
     batch_size: int = 16
     lr: float = 5e-5
@@ -31,13 +32,14 @@ class TrainConfig(Config):
 class Trainer:
     def __init__(
             self, queue_size: int, batch_size: int, lr: float, steps_per_cycle: int, sims_per_move: int,
-            temperature: float,
+            temperature: float, gamma: float,
             data_dir: str, model_dir: str, model_config: BaseModelConfig, resume: bool = False, data_workers: int = 4
     ):
         self.queue_size = queue_size
 
         self.sims_per_move = sims_per_move
         self.temperature = temperature
+        self.gamma = gamma
 
         self.batch_size = batch_size
         self.lr = lr
@@ -113,7 +115,7 @@ class Trainer:
                     self.load_model(model)
                     data_timestamp = self.timestamp.value
 
-            history = Search.self_play(self.sims_per_move, model, self.temperature)
+            history = Search.self_play(self.sims_per_move, model, self.temperature, self.gamma)
 
             with self.data_lock:
                 files = sorted([

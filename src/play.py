@@ -12,6 +12,7 @@ from .model import BaseModelConfig, BaseModel
 class Player:
     def __init__(
             self, model_config: BaseModelConfig, model_path: str, thinking_time: float, temperature: Optional[float],
+            gamma: float = 0.99,
             computer_first: bool = False
     ):
         self.user_input = Event()
@@ -26,10 +27,11 @@ class Player:
 
         self.thinking_time = thinking_time
         self.temperature = temperature
+        self.gamma = gamma
         self.computer_first = computer_first
 
     def search_worker(self):
-        search = Search()
+        search = Search(gamma=self.gamma)
 
         model: BaseModel = self.model_config.build_model()
         model.load_state_dict(torch.load(self.model_path, weights_only=True))
@@ -49,7 +51,7 @@ class Player:
                 player = True
                 self.computer_output_request.clear()
 
-                policy = search.policy(self.temperature if self.temperature is not None else 0.1)
+                policy = search.policy(self.temperature if self.temperature is not None else 1.0)
                 if self.temperature is None:
                     action = policy.argmax()
                 else:

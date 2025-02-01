@@ -19,7 +19,7 @@ EXPLORE_COEFF = np.sqrt(2)
 class GameHistory:
     boards: LongTensor
     players: LongTensor
-    qualities: FloatTensor
+    values: FloatTensor
     legals: BoolTensor
 
     def save(self, path: str):
@@ -62,7 +62,7 @@ class Search:
         return likelihood / likelihood.sum()
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0, gamma: float = 0.9):
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0, gamma: float = 0.99):
         model.eval()
         model.requires_grad_(False)
 
@@ -70,7 +70,7 @@ class Search:
 
         boards: List[LongTensor] = []
         players: List[int] = []
-        qualities: List[FloatTensor] = []
+        values: List[FloatTensor] = []
         legals: List[BoolTensor] = []
         while search.root.winner is None:
             for _ in range(sims_per_move):
@@ -78,7 +78,7 @@ class Search:
 
             boards.append(search.root.state.board)
             players.append(search.root.state.player)
-            qualities.append(search.root.quality)
+            values.append(search.root.value)
             legals.append(~search.root.state.illegal_moves())
 
             action = torch.multinomial(search.policy(temperature), 1)[0]
@@ -87,7 +87,7 @@ class Search:
         return GameHistory(
             boards=torch.stack(boards),
             players=torch.tensor(players, dtype=torch.long),
-            qualities=torch.stack(qualities),
+            values=torch.stack(values),
             legals=torch.stack(legals)
         )
 
@@ -145,7 +145,7 @@ class Search:
             action = node.action
             node = node.parent
 
-            if node.state.player == 1:
+            if node.state.player != 1:
                 node.value[action] = self.gamma * node.children[action].value.max()
             else:
                 node.value[action] = self.gamma * node.children[action].value.min()

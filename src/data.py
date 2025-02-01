@@ -20,8 +20,8 @@ class GameHistoryDataset(Dataset):
         self.players = torch.concatenate([
             history["players"] for history in histories
         ]).to(torch.long)
-        self.qualities = torch.concatenate([
-            history["qualities"] for history in histories
+        self.values = torch.concatenate([
+            history["values"] for history in histories
         ]).to(torch.float32)
         self.legals = torch.concatenate([
             history["legals"] for history in histories
@@ -33,15 +33,16 @@ class GameHistoryDataset(Dataset):
     def __getitem__(self, idx):
         board = F.one_hot(self.boards[idx], num_classes=3).to(torch.float32)
         player = self.players[idx]
-        quality = self.qualities[idx]
+        value = self.values[idx]
         legal = self.legals[idx]
 
         if player != 1:
             board = board[:, :, [0, 2, 1]]
+            value = -value
 
         if random() < self.p_flip:
             board = board.flip(0)
-            quality = quality.flip(0)
+            value = value.flip(0)
             legal = legal.flip(0)
 
-        return board, quality, legal
+        return board, value, legal
