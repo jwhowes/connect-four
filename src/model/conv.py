@@ -52,7 +52,7 @@ class ConvModel(BaseModel):
         ]
         self.layers = nn.Sequential(*layers, nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
 
-        self.action_head = nn.Sequential(
+        self.head = nn.Sequential(
             nn.LayerNorm(dims[-1], eps=norm_eps),
             nn.GELU(),
             nn.Linear(dims[-1], NUM_COLS)
@@ -62,4 +62,4 @@ class ConvModel(BaseModel):
         x = self.emb(board.permute(0, 3, 1, 2))
         x = self.layers(x)
 
-        return self.action_head(x)
+        return self.head(x)

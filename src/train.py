@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .data import GameHistoryDataset
-from .mcts import MCTS
+from .search import Search
 from .model import BaseModelConfig, BaseModel
 from .util import Config, timestamp
 
@@ -113,7 +113,7 @@ class Trainer:
                     self.load_model(model)
                     data_timestamp = self.timestamp.value
 
-            history = MCTS.self_play(self.sims_per_move, model, self.temperature)
+            history = Search.self_play(self.sims_per_move, model, self.temperature)
 
             with self.data_lock:
                 files = sorted([
@@ -151,11 +151,12 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, mcts_prob) in pbar:
+            for i, (board, quality, legal) in pbar:
                 opt.zero_grad()
 
-                prior = model(board)
-                loss = -(mcts_prob * F.log_softmax(prior, dim=-1)).sum(-1).mean()
+                pred = model(board)
+                loss = F.mse_loss(pred, quality, reduction='none')
+                loss = loss[legal].mean()
 
                 total_loss += loss.item()
 
@@ -167,3 +168,5 @@ class Trainer:
 
             with self.model_lock:
                 self.save_model(model)
+
+            time.sleep(0.5)

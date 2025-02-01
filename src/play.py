@@ -5,7 +5,7 @@ from typing import Optional
 import torch
 
 from .gym import State
-from .mcts import MCTS
+from .search import Search
 from .model import BaseModelConfig, BaseModel
 
 
@@ -28,8 +28,8 @@ class Player:
         self.temperature = temperature
         self.computer_first = computer_first
 
-    def mcts_worker(self):
-        mcts = MCTS()
+    def search_worker(self):
+        search = Search()
 
         model: BaseModel = self.model_config.build_model()
         model.load_state_dict(torch.load(self.model_path, weights_only=True))
@@ -37,7 +37,7 @@ class Player:
         model.requires_grad_(False)
 
         player = not self.computer_first
-        while mcts.root.winner is None:
+        while search.root.winner is None:
             action = None
 
             if player and self.user_input.is_set():
@@ -49,7 +49,7 @@ class Player:
                 player = True
                 self.computer_output_request.clear()
 
-                policy = mcts.policy(self.temperature if self.temperature is not None else 0.1)
+                policy = search.policy(self.temperature if self.temperature is not None else 0.1)
                 if self.temperature is None:
                     action = policy.argmax()
                 else:
@@ -59,13 +59,16 @@ class Player:
                 self.computer_output_sent.set()
 
             if action is not None:
-                mcts.step(action)
+                search.step(action)
 
-            mcts.search(model)
+                if search.root.winner is not None:
+                    return
+
+            search.search(model)
 
     def play(self):
-        mcts_worker = Process(target=self.mcts_worker)
-        mcts_worker.start()
+        search_worker = Process(target=self.search_worker)
+        search_worker.start()
 
         state = State.initial()
 
