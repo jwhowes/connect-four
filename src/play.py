@@ -28,7 +28,7 @@ class Player:
         self.temperature = temperature
         self.computer_first = computer_first
 
-    def search_worker(self):
+    def mcts_worker(self):
         mcts = MCTS()
 
         model: BaseModel = self.model_config.build_model()
@@ -37,7 +37,7 @@ class Player:
         model.requires_grad_(False)
 
         player = not self.computer_first
-        while search.root.winner is None:
+        while mcts.root.winner is None:
             action = None
 
             if player and self.user_input.is_set():
@@ -49,7 +49,7 @@ class Player:
                 player = True
                 self.computer_output_request.clear()
 
-                policy = search.policy(self.temperature if self.temperature is not None else 1.0)
+                policy = mcts.policy(self.temperature if self.temperature is not None else 1.0)
                 if self.temperature is None:
                     action = policy.argmax()
                 else:
@@ -59,16 +59,16 @@ class Player:
                 self.computer_output_sent.set()
 
             if action is not None:
-                search.step(action)
+                mcts.step(action)
 
-                if search.root.winner is not None:
+                if mcts.root.winner is not None:
                     return
 
-            search.search(model)
+            mcts.search(model)
 
     def play(self):
-        search_worker = Process(target=self.search_worker)
-        search_worker.start()
+        mcts_worker = Process(target=self.mcts_worker)
+        mcts_worker.start()
 
         state = State.initial()
 
