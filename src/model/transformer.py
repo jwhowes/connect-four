@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from math import sqrt
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -74,9 +74,9 @@ class Transformer(BaseModel):
             Block(d_model, n_heads, norm_eps=norm_eps) for _ in range(n_layers)
         ])
 
-        self.action_head = nn.Sequential(
+        self.head = nn.Sequential(
             nn.LayerNorm(d_model, eps=norm_eps),
-            nn.Linear(d_model, NUM_COLS)
+            nn.Linear(d_model, 3)
         )
 
     def forward(self, board: FloatTensor) -> FloatTensor:

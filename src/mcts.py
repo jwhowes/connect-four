@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 import numpy as np
-from torch import FloatTensor, LongTensor, BoolTensor
+from torch import FloatTensor, LongTensor
 
 from . import NUM_COLS
 from .gym import State
@@ -19,8 +19,7 @@ EXPLORE_COEFF = np.sqrt(2)
 class GameHistory:
     boards: LongTensor
     players: LongTensor
-    values: FloatTensor
-    legals: BoolTensor
+    winner: int
 
     def save(self, path: str):
         torch.save(
@@ -37,23 +36,14 @@ class Node:
         self.winner: Optional[0 | 1 | 2] = state.winner()
 
         self.leaf = True
-        self.value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.long)
+        self.value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
 
-    @property
-    def quality(self):
-        if self.state.player == 1:
-            return self.value
 
-        return -self.value
-
-
-class Search:
-    def __init__(self, gamma: float = 0.9):
-        self.gamma = gamma
-
-        self.root = Node(State.initial())
+class MCTS:
+    def __init__(self):
+        self.root: Node = Node(State.initial())
         self.root_visits: int = 1
 
     def policy(self, temperature: float = 1.0):
@@ -62,24 +52,20 @@ class Search:
         return likelihood / likelihood.sum()
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0, gamma: float = 0.99):
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
-        search = Search(gamma)
+        mcts = MCTS()
 
         boards: List[LongTensor] = []
         players: List[int] = []
-        values: List[FloatTensor] = []
-        legals: List[BoolTensor] = []
         while search.root.winner is None:
             for _ in range(sims_per_move):
                 search.search(model)
 
             boards.append(search.root.state.board)
             players.append(search.root.state.player)
-            values.append(search.root.value)
-            legals.append(~search.root.state.illegal_moves())
 
             action = torch.multinomial(search.policy(temperature), 1)[0]
             search.step(action)
@@ -87,8 +73,7 @@ class Search:
         return GameHistory(
             boards=torch.stack(boards),
             players=torch.tensor(players, dtype=torch.long),
-            values=torch.stack(values),
-            legals=torch.stack(legals)
+            winner=search.root.winner
         )
 
     def step(self, action: int):
@@ -107,7 +92,7 @@ class Search:
 
         while not node.leaf:
             search_objective = (
-                node.quality +
+                torch.nan_to_num(node.value / node.num_visits, nan=0.0) +
                 EXPLORE_COEFF * np.log(parent_visits) / (1 + node.num_visits)
             )
             search_objective[node.state.illegal_moves()] = float('-inf')
@@ -123,29 +108,22 @@ class Search:
             node = node.children[child_idx]
 
         if node.winner is not None:
-            if node.winner == 0:
-                node.parent.value[node.action] = 0
-            elif node.winner == 1:
-                node.parent.value[node.action] = 1
-            else:
-                node.parent.value[node.action] = -1
-
-            node = node.parent
+            winner = torch.zeros(3, dtype=torch.float32)
+            winner[node.winner] = 1.0
         else:
             node.leaf = False
             board = F.one_hot(node.state.board.unsqueeze(0), num_classes=3).to(torch.float32)
             if node.state.player != 1:
                 board = board[:, :, :, [0, 2, 1]]
 
-            node.value = model(board).squeeze(0)
+            winner = model(board).squeeze(0)
             if node.state.player != 1:
-                node.value = -node.value
+                winner = winner[[0, 2, 1]]
+
+            winner = F.softmax(winner, dim=-1)
 
         while node.parent is not None:
             action = node.action
             node = node.parent
 
-            if node.state.player != 1:
-                node.value[action] = self.gamma * node.children[action].value.max()
-            else:
-                node.value[action] = self.gamma * node.children[action].value.min()
+            node.value[action] += winner[node.state.player] - winner[3 - node.state.player]

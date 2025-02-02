@@ -60,7 +60,7 @@ def play(ctx, thinking_time: float, temperature: Optional[float], computer_first
 
     player = Player(
         ctx.obj["model_config"], filename, thinking_time,
-        temperature=temperature, gamma=ctx.obj["train_config"].gamma, computer_first=computer_first
+        temperature=temperature, computer_first=computer_first
     )
     player.play()
 

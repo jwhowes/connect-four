@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .data import GameHistoryDataset
-from .search import Search
+from .mcts import MCTS
 from .model import BaseModelConfig, BaseModel
 from .util import Config, timestamp
 
@@ -22,7 +22,6 @@ class TrainConfig(Config):
 
     sims_per_move: int = 250
     temperature: float = 1.0
-    gamma: float = 0.99
 
     batch_size: int = 16
     lr: float = 5e-5
@@ -32,14 +31,13 @@ class TrainConfig(Config):
 class Trainer:
     def __init__(
             self, queue_size: int, batch_size: int, lr: float, steps_per_cycle: int, sims_per_move: int,
-            temperature: float, gamma: float,
+            temperature: float,
             data_dir: str, model_dir: str, model_config: BaseModelConfig, resume: bool = False, data_workers: int = 4
     ):
         self.queue_size = queue_size
 
         self.sims_per_move = sims_per_move
         self.temperature = temperature
-        self.gamma = gamma
 
         self.batch_size = batch_size
         self.lr = lr
@@ -115,7 +113,7 @@ class Trainer:
                     self.load_model(model)
                     data_timestamp = self.timestamp.value
 
-            history = Search.self_play(self.sims_per_move, model, self.temperature, self.gamma)
+            history = MCTS.self_play(self.sims_per_move, model, self.temperature)
 
             with self.data_lock:
                 files = sorted([
@@ -153,12 +151,11 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, value, legal) in pbar:
+            for i, (board, winner) in pbar:
                 opt.zero_grad()
 
                 pred = model(board)
-                loss = F.mse_loss(pred, value, reduction='none')
-                loss = loss[legal].mean()
+                loss = F.cross_entropy(pred, winner)
 
                 total_loss += loss.item()
 
