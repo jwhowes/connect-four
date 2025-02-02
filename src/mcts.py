@@ -60,20 +60,20 @@ class MCTS:
 
         boards: List[LongTensor] = []
         players: List[int] = []
-        while search.root.winner is None:
+        while mcts.root.winner is None:
             for _ in range(sims_per_move):
-                search.search(model)
+                mcts.search(model)
 
-            boards.append(search.root.state.board)
-            players.append(search.root.state.player)
+            boards.append(mcts.root.state.board)
+            players.append(mcts.root.state.player)
 
-            action = torch.multinomial(search.policy(temperature), 1)[0]
-            search.step(action)
+            action = torch.multinomial(mcts.policy(temperature), 1)[0]
+            mcts.step(action)
 
         return GameHistory(
             boards=torch.stack(boards),
             players=torch.tensor(players, dtype=torch.long),
-            winner=search.root.winner
+            winner=mcts.root.winner
         )
 
     def step(self, action: int):
