@@ -12,7 +12,7 @@ from .. import NUM_ROWS, NUM_COLS
 from ..util import Config
 
 class Attention(nn.Module):
-    def __init__(self, d_model: int, n_heads: int):
+    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0):
         super(Attention, self).__init__()
         assert d_model % n_heads == 0
 
@@ -24,6 +24,7 @@ class Attention(nn.Module):
         self.W_v = nn.Linear(d_model, d_model, bias=False)
 
         self.W_o = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: FloatTensor) -> FloatTensor:
         q = rearrange(self.W_q(x), "b l (n d) -> b n l d", n=self.n_heads)
@@ -32,17 +33,20 @@ class Attention(nn.Module):
 
         return self.W_o(
             rearrange(
-                F.softmax((q @ k.transpose(-2, -1)) / self.scale, dim=-1) @ v, "b n l d -> b l (n d)"
+                self.dropout(F.softmax((q @ k.transpose(-2, -1)) / self.scale, dim=-1)) @ v, "b n l d -> b l (n d)"
             )
         )
 
 
 class Block(nn.Module):
-    def __init__(self, d_model: int, n_heads: int, d_hidden: Optional[int] = None, norm_eps: float = 1e-6):
+    def __init__(
+            self, d_model: int, n_heads: int, d_hidden: Optional[int] = None, norm_eps: float = 1e-6,
+            attn_dropout: float = 0.0, resid_dropout: float = 0.0
+    ):
         super(Block, self).__init__()
         if d_hidden is None:
             d_hidden = 4 * d_model
-        self.attn = Attention(d_model, n_heads)
+        self.attn = Attention(d_model, n_heads, dropout=attn_dropout)
         self.attn_norm = nn.LayerNorm(d_model, eps=norm_eps)
 
         self.ffn = nn.Sequential(
@@ -51,44 +55,58 @@ class Block(nn.Module):
             nn.Linear(d_hidden, d_model)
         )
         self.ffn_norm = nn.LayerNorm(d_model, eps=norm_eps)
+        self.ffn_dropout = nn.Dropout(resid_dropout)
 
     def forward(self, x: FloatTensor) -> FloatTensor:
         x = x + self.attn(self.attn_norm(x))
 
-        return x + self.ffn(self.ffn_norm(x))
+        return x + self.ffn_dropout(self.ffn(self.ffn_norm(x)))
 
 
 class Transformer(BaseModel):
-    def __init__(self, d_model: int, n_layers: int, n_heads: int, norm_eps: float = 1e-6):
+    def __init__(
+            self, d_model: int, n_layers: int, n_heads: int, norm_eps: float = 1e-6,
+            attn_dropout: float = 0.0, resid_dropout: float = 0.0
+    ):
         super(Transformer, self).__init__()
         self.emb = nn.Linear(3, d_model)
 
         self.pos_emb = nn.Parameter(
             torch.empty(1, NUM_ROWS, NUM_COLS, d_model).normal_(std=sqrt(1 / d_model))
         )
+        self.winner_emb = nn.Parameter(
+            torch.empty(1, 1, d_model).normal_(std=sqrt(1 / d_model))
+        )
         self.action_emb = nn.Parameter(
             torch.empty(1, 1, d_model).normal_(std=sqrt(1 / d_model))
         )
 
         self.layers = nn.Sequential(*[
-            Block(d_model, n_heads, norm_eps=norm_eps) for _ in range(n_layers)
+            Block(
+                d_model, n_heads, norm_eps=norm_eps, attn_dropout=attn_dropout, resid_dropout=resid_dropout
+            ) for _ in range(n_layers)
         ])
 
-        self.head = nn.Sequential(
+        self.winner_head = nn.Sequential(
             nn.LayerNorm(d_model, eps=norm_eps),
             nn.Linear(d_model, 3)
+        )
+        self.action_head = nn.Sequential(
+            nn.LayerNorm(d_model, eps=norm_eps),
+            nn.Linear(d_model, NUM_COLS)
         )
 
     def forward(self, board: FloatTensor) -> FloatTensor:
         B = board.shape[0]
         x = torch.concatenate((
+            self.winner_emb.expand(B, -1, -1),
             self.action_emb.expand(B, -1, -1),
             (self.pos_emb + self.emb(board)).flatten(1, 2)
         ), dim=1)
 
         x = self.layers(x)
 
-        return self.action_head(x[:, 1])
+        return self.winner_head(x[:, 0]), self.action_head(x[:, 1])
 
 
 @dataclass

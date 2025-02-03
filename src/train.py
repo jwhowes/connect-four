@@ -30,18 +30,17 @@ class TrainConfig(Config):
 
 class Trainer:
     def __init__(
-            self, queue_size: int, batch_size: int, lr: float, steps_per_cycle: int, sims_per_move: int,
-            temperature: float,
+            self, train_config: TrainConfig,
             data_dir: str, model_dir: str, model_config: BaseModelConfig, resume: bool = False, data_workers: int = 4
     ):
-        self.queue_size = queue_size
+        self.queue_size = train_config.queue_size
 
-        self.sims_per_move = sims_per_move
-        self.temperature = temperature
+        self.sims_per_move = train_config.sims_per_move
+        self.temperature = train_config.temperature
 
-        self.batch_size = batch_size
-        self.lr = lr
-        self.steps_per_cycle = steps_per_cycle
+        self.batch_size = train_config.batch_size
+        self.lr = train_config.lr
+        self.steps_per_cycle = train_config.steps_per_cycle
 
         self.data_dir = data_dir
         self.model_dir = model_dir
@@ -151,11 +150,11 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, winner) in pbar:
+            for i, (board, winner, prior) in pbar:
                 opt.zero_grad()
 
-                pred = model(board)
-                loss = F.cross_entropy(pred, winner)
+                pred_winner, pred_prior = model(board)
+                loss = F.cross_entropy(pred_winner, winner) - (prior * F.log_softmax(pred_prior, dim=-1)).sum(-1).mean()
 
                 total_loss += loss.item()
 

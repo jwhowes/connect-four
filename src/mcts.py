@@ -12,13 +12,14 @@ from . import NUM_COLS
 from .gym import State
 from .model import BaseModel
 
-EXPLORE_COEFF = np.sqrt(2)
+EXPLORE_COEFF = 5.0
 
 
 @dataclass
 class GameHistory:
     boards: LongTensor
     players: LongTensor
+    priors: FloatTensor
     winner: int
 
     def save(self, path: str):
@@ -37,6 +38,7 @@ class Node:
 
         self.leaf = True
         self.value: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
+        self.prior: FloatTensor = torch.zeros(NUM_COLS, dtype=torch.float32)
         self.num_visits: LongTensor = torch.zeros(NUM_COLS, dtype=torch.long)
         self.children: List[Optional[Node]] = [None for _ in range(NUM_COLS)]
 
@@ -60,19 +62,24 @@ class MCTS:
 
         boards: List[LongTensor] = []
         players: List[int] = []
+        priors: List[FloatTensor] = []
         while mcts.root.winner is None:
             for _ in range(sims_per_move):
                 mcts.search(model)
 
+            prior = mcts.policy(temperature)
+
             boards.append(mcts.root.state.board)
             players.append(mcts.root.state.player)
+            priors.append(prior)
 
-            action = torch.multinomial(mcts.policy(temperature), 1)[0]
+            action = torch.multinomial(prior, 1)[0]
             mcts.step(action)
 
         return GameHistory(
             boards=torch.stack(boards),
             players=torch.tensor(players, dtype=torch.long),
+            priors=torch.stack(priors),
             winner=mcts.root.winner
         )
 
@@ -93,7 +100,7 @@ class MCTS:
         while not node.leaf:
             search_objective = (
                 torch.nan_to_num(node.value / node.num_visits, nan=0.0) +
-                EXPLORE_COEFF * np.log(parent_visits) / (1 + node.num_visits)
+                EXPLORE_COEFF * node.prior * np.sqrt(parent_visits) / (1 + node.num_visits)
             )
             search_objective[node.state.illegal_moves()] = float('-inf')
 
@@ -116,14 +123,16 @@ class MCTS:
             if node.state.player != 1:
                 board = board[:, :, :, [0, 2, 1]]
 
-            winner = model(board).squeeze(0)
+            winner, prior = model(board)
+            winner = winner.squeeze(0)
             if node.state.player != 1:
                 winner = winner[[0, 2, 1]]
 
             winner = F.softmax(winner, dim=-1)
+            node.prior = F.softmax(prior.squeeze(0), dim=-1)
 
         while node.parent is not None:
             action = node.action
             node = node.parent
 
-            node.value[action] += winner[node.state.player] - winner[3 - node.state.player]
+            node.value[action] += (winner[node.state.player] - winner[3 - node.state.player])

@@ -6,5 +6,5 @@ from torch import nn, FloatTensor, Tensor
 
 class BaseModel(ABC, nn.Module):
     @abstractmethod
-    def forward(self, board: Tensor) -> FloatTensor:
+    def forward(self, board: Tensor) -> Tuple[FloatTensor, FloatTensor]:
         ...

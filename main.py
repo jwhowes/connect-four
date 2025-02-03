@@ -36,7 +36,7 @@ def cli(ctx: click.Context, exp_dir: str):
 @click.pass_context
 def train(ctx: click.Context, resume: bool, data_dir: str, data_workers: int):
     trainer = Trainer(
-        **ctx.obj["train_config"].__dict__,
+        ctx.obj["train_config"],
         data_dir=data_dir,
         model_dir=ctx.obj["model_dir"],
         model_config=ctx.obj["model_config"],

@@ -9,11 +9,13 @@ from torch import LongTensor, BoolTensor
 
 from . import NUM_COLS, NUM_ROWS
 
-H_kernel = torch.tensor([1, 1, 1, 1]).view(1, 1, 1, 4).expand(2, -1, -1, -1).contiguous()
+H_kernel = torch.tensor([0, 1, 1, 1, 1]).view(1, 1, 1, 5).expand(2, -1, -1, -1).contiguous()
 V_kernel = H_kernel.transpose(2, 3).contiguous()
 
-DL_kernel = torch.eye(4, dtype=torch.long).view(1, 1, 4, 4).expand(2, -1, -1, -1).contiguous()
-DR_kernel = DL_kernel.flip(3).contiguous()
+DR_kernel = torch.eye(5, dtype=torch.long)
+DR_kernel[0, 0] = 0
+DR_kernel = DR_kernel.view(1, 1, 5, 5).expand(2, -1, -1, -1).contiguous()
+DL_kernel = DR_kernel.flip(3).contiguous()
 
 
 @dataclass
@@ -50,7 +52,7 @@ class State:
         board = F.one_hot(self.board.unsqueeze(0), num_classes=3).permute(0, 3, 1, 2)[:, 1:]
 
         for kernel in [H_kernel, V_kernel, DL_kernel, DR_kernel]:
-            m = F.conv2d(board, kernel, groups=2).amax((0, 2, 3))
+            m = F.conv2d(board, kernel, groups=2, padding=2).amax((0, 2, 3))
 
             if m.max() >= 4:
                 return int(m.argmax() + 1)
