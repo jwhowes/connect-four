@@ -48,13 +48,13 @@ class MCTS:
         self.root: Node = Node(State.initial())
         self.root_visits: int = 1
 
-    def policy(self, temperature: float = 1.0):
-        likelihood = self.root.num_visits ** (1 / temperature)
-
-        return likelihood / likelihood.sum()
+    def policy(self, temperature: float = 0.1):
+        return F.softmax(
+            torch.nan_to_num(self.root.value / self.root.num_visits, nan=float('-inf')) / temperature, dim=-1
+        )
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 1.0) -> GameHistory:
+    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
