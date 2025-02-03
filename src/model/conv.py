@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from torch import nn, FloatTensor
 
 from .base import BaseModel
+from .. import NUM_COLS
 
 
 class LayerNorm2d(nn.LayerNorm):
@@ -52,14 +53,19 @@ class ConvModel(BaseModel):
         ]
         self.layers = nn.Sequential(*layers, nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
 
-        self.head = nn.Sequential(
+        self.winner_head = nn.Sequential(
             nn.Linear(dims[-1], dims[-1]),
             nn.GELU(),
             nn.Linear(dims[-1], 3)
         )
+        self.action_head = nn.Sequential(
+            nn.Linear(dims[-1], dims[-1]),
+            nn.GELU(),
+            nn.Linear(dims[-1], NUM_COLS)
+        )
 
-    def forward(self, board: FloatTensor) -> FloatTensor:
+    def forward(self, board: FloatTensor) -> Tuple[FloatTensor, FloatTensor]:
         x = self.emb(board.permute(0, 3, 1, 2))
         x = self.layers(x)
 
-        return self.head(x)
+        return self.winner_head(x), self.action_head(x)
