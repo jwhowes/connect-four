@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, List
 from dataclasses import dataclass
+from random import random
 
 import torch
 import torch.nn.functional as F
@@ -48,17 +49,31 @@ class MCTS:
         self.root: Node = Node(State.initial())
         self.root_visits: int = 1
 
-    def policy(self, temperature: float = 0.1):
-        return F.softmax(
-            torch.nan_to_num(self.root.value / self.root.num_visits, nan=float('-inf')) / temperature, dim=-1
-        )
+    def policy(self, temperature: float = 1.0):
+        likelihood = self.root.num_visits ** (1 / temperature)
+
+        return likelihood / likelihood.sum()
 
     @staticmethod
-    def self_play(sims_per_move: int, model: BaseModel, temperature: float = 0.1) -> GameHistory:
+    def self_play(
+            sims_per_move: int, model: BaseModel, temperature: float = 1.0,
+            p_random_choice: float = 0.0, p_random_start: float = 0.0,
+            min_random_moves: int = 3, max_random_moves: int = 10
+    ) -> GameHistory:
         model.eval()
         model.requires_grad_(False)
 
         mcts = MCTS()
+
+        if random() < p_random_start:
+            num_moves = np.random.randint(min_random_moves, max_random_moves + 1)
+            for _ in range(num_moves):
+                if mcts.root.winner is not None:
+                    mcts = MCTS()
+
+                mcts.step(
+                    np.random.choice(torch.where(~mcts.root.state.illegal_moves())[0])
+                )
 
         boards: List[LongTensor] = []
         players: List[int] = []
@@ -73,7 +88,11 @@ class MCTS:
             players.append(mcts.root.state.player)
             priors.append(prior)
 
-            action = torch.multinomial(prior, 1)[0]
+            if random() < p_random_choice:
+                action = np.random.choice(torch.where(~mcts.root.state.illegal_moves())[0])
+            else:
+                action = torch.multinomial(prior, 1)[0]
+
             mcts.step(action)
 
         return GameHistory(

@@ -49,7 +49,7 @@ class Player:
                 player = True
                 self.computer_output_request.clear()
 
-                policy = mcts.policy(self.temperature if self.temperature is not None else 0.1)
+                policy = mcts.policy(self.temperature if self.temperature is not None else 1.0)
                 if self.temperature is None:
                     action = policy.argmax()
                 else:

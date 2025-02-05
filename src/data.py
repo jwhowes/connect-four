@@ -7,7 +7,9 @@ from torch.utils.data import Dataset
 
 
 class GameHistoryDataset(Dataset):
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, p_flip: float = 0.5):
+        self.p_flip = p_flip
+
         histories = [
             torch.load(os.path.join(data_dir, file), weights_only=True) for file in os.listdir(data_dir)
         ]
@@ -40,7 +42,7 @@ class GameHistoryDataset(Dataset):
             if winner != 0:
                 winner = 3 - winner
 
-        if random() < 0.5:
+        if random() < self.p_flip:
             board = board.flip(0)
             prior = prior.flip(0)
 

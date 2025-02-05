@@ -21,7 +21,14 @@ class TrainConfig(Config):
     queue_size: int = 16
 
     sims_per_move: int = 250
-    temperature: float = 0.1
+    temperature: float = 1.0
+    p_random_choice: float = 0.0
+
+    p_flip: float = 0.5
+
+    p_random_start: float = 0.0
+    min_random_moves: int = 3
+    max_random_moves: int = 10
 
     batch_size: int = 16
     lr: float = 5e-5
@@ -35,12 +42,7 @@ class Trainer:
     ):
         self.queue_size = train_config.queue_size
 
-        self.sims_per_move = train_config.sims_per_move
-        self.temperature = train_config.temperature
-
-        self.batch_size = train_config.batch_size
-        self.lr = train_config.lr
-        self.steps_per_cycle = train_config.steps_per_cycle
+        self.train_config = train_config
 
         self.data_dir = data_dir
         self.model_dir = model_dir
@@ -112,7 +114,13 @@ class Trainer:
                     self.load_model(model)
                     data_timestamp = self.timestamp.value
 
-            history = MCTS.self_play(self.sims_per_move, model, self.temperature)
+            history = MCTS.self_play(
+                self.train_config.sims_per_move, model, self.train_config.temperature,
+                p_random_choice=self.train_config.p_random_choice,
+                p_random_start=self.train_config.p_random_start,
+                min_random_moves=self.train_config.min_random_moves,
+                max_random_moves=self.train_config.max_random_moves
+            )
 
             with self.data_lock:
                 files = sorted([
@@ -127,8 +135,8 @@ class Trainer:
         model: BaseModel = self.model_config.build_model()
         model.train()
 
-        opt = torch.optim.Adam(model.parameters(), lr=self.lr)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, self.steps_per_cycle)
+        opt = torch.optim.Adam(model.parameters(), lr=self.train_config.lr)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, self.train_config.steps_per_cycle)
 
         with self.model_lock:
             self.load_model(model)
@@ -139,11 +147,11 @@ class Trainer:
                 continue
 
             with self.data_lock:
-                dataset = GameHistoryDataset(self.data_dir)
+                dataset = GameHistoryDataset(self.data_dir, p_flip=self.train_config.p_flip)
 
             dataloader = DataLoader(
                 dataset,
-                batch_size=self.batch_size,
+                batch_size=self.train_config.batch_size,
                 shuffle=True,
                 pin_memory=True
             )
