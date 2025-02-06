@@ -20,9 +20,6 @@ class GameHistoryDataset(Dataset):
         self.players = torch.concatenate([
             history["players"] for history in histories
         ]).to(torch.long)
-        self.priors = torch.concatenate([
-            history["priors"] for history in histories
-        ]).to(torch.float32)
         self.winners = torch.concatenate([
             torch.tensor([history["winner"] for _ in range(history["boards"].shape[0])], dtype=torch.long)
             for history in histories
@@ -35,7 +32,6 @@ class GameHistoryDataset(Dataset):
         board = F.one_hot(self.boards[idx], num_classes=3).to(torch.float32)
         player = self.players[idx]
         winner = self.winners[idx]
-        prior = self.priors[idx]
 
         if player != 1:
             board = board[:, :, [0, 2, 1]]
@@ -44,6 +40,5 @@ class GameHistoryDataset(Dataset):
 
         if random() < self.p_flip:
             board = board.flip(0)
-            prior = prior.flip(0)
 
-        return board, winner, prior
+        return board, winner

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from typing import Optional
 from multiprocessing import Value, Lock, Process
 
 import torch
@@ -26,13 +27,9 @@ class TrainConfig(Config):
 
     p_flip: float = 0.5
 
-    p_random_start: float = 0.0
-    min_random_moves: int = 3
-    max_random_moves: int = 10
-
     batch_size: int = 16
     lr: float = 5e-5
-    steps_per_cycle: int = 500
+    weight_decay: float = 0.01
 
 
 class Trainer:
@@ -76,19 +73,26 @@ class Trainer:
                 os.remove(os.path.join(self.data_dir, file))
 
             self.timestamp = Value('i', timestamp())
-            torch.save(
-                model.state_dict(),
+            torch.save({
+                "model": model.state_dict()
+            },
                 os.path.join(self.model_dir, f"{self.timestamp.value}.pt")
             )
 
-    def load_model(self, model: BaseModel):
-        model.load_state_dict(torch.load(os.path.join(self.model_dir, f"{self.timestamp.value}.pt"), weights_only=True))
+    def load_model(self, model: BaseModel, opt: Optional[torch.optim.Optimizer] = None):
+        state_dict = torch.load(os.path.join(self.model_dir, f"{self.timestamp.value}.pt"), weights_only=True)
+        model.load_state_dict(state_dict["model"])
+        if opt is not None and "opt" in state_dict:
+            opt.load_state_dict(state_dict["opt"])
 
-    def save_model(self, model: BaseModel):
+    def save_model(self, model: BaseModel, opt: torch.optim.Optimizer):
         os.remove(os.path.join(self.model_dir, f"{self.timestamp.value}.pt"))
 
         self.timestamp.value = timestamp()
-        torch.save(model.state_dict(), os.path.join(self.model_dir, f"{self.timestamp.value}.pt"))
+        torch.save({
+            "model": model.state_dict(),
+            "opt": opt.state_dict()
+        }, os.path.join(self.model_dir, f"{self.timestamp.value}.pt"))
 
     def train(self):
         train_worker = Process(target=self.train_worker)
@@ -117,9 +121,6 @@ class Trainer:
             history = MCTS.self_play(
                 self.train_config.sims_per_move, model, self.train_config.temperature,
                 p_random_choice=self.train_config.p_random_choice,
-                p_random_start=self.train_config.p_random_start,
-                min_random_moves=self.train_config.min_random_moves,
-                max_random_moves=self.train_config.max_random_moves
             )
 
             with self.data_lock:
@@ -135,11 +136,10 @@ class Trainer:
         model: BaseModel = self.model_config.build_model()
         model.train()
 
-        opt = torch.optim.Adam(model.parameters(), lr=self.train_config.lr)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, self.train_config.steps_per_cycle)
+        opt = torch.optim.AdamW(model.parameters(), lr=self.train_config.lr, weight_decay=self.train_config.weight_decay)
 
         with self.model_lock:
-            self.load_model(model)
+            self.load_model(model, opt)
 
         while True:
             if len(os.listdir(self.data_dir)) == 0:
@@ -158,21 +158,20 @@ class Trainer:
 
             pbar = tqdm(enumerate(dataloader), total=len(dataloader))
             total_loss = 0
-            for i, (board, winner, prior) in pbar:
+            for i, (board, winner) in pbar:
                 opt.zero_grad()
 
-                pred_winner, pred_prior = model(board)
-                loss = F.cross_entropy(pred_winner, winner) - (prior * F.log_softmax(pred_prior, dim=-1)).sum(-1).mean()
+                pred_winner = model(board)
+                loss = F.cross_entropy(pred_winner, winner)
 
                 total_loss += loss.item()
 
                 loss.backward()
                 opt.step()
-                lr_scheduler.step()
 
                 pbar.set_description(f"Average Loss: {total_loss / (i + 1):.4f}")
 
             with self.model_lock:
-                self.save_model(model)
+                self.save_model(model, opt)
 
             time.sleep(0.5)

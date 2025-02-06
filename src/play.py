@@ -32,7 +32,7 @@ class Player:
         mcts = MCTS()
 
         model: BaseModel = self.model_config.build_model()
-        model.load_state_dict(torch.load(self.model_path, weights_only=True))
+        model.load_state_dict(torch.load(self.model_path, weights_only=True)["model"])
         model.eval()
         model.requires_grad_(False)
 
