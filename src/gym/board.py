@@ -30,8 +30,8 @@ class Board:
         )
 
     @staticmethod
-    def horizontal_winner(board, action) -> bool:
-        shift = action - 3
+    def horizontal_winner(board, pos) -> bool:
+        shift = pos - 3
 
         if shift < 0:
             masked = (board << -shift) & 0x7f
@@ -46,8 +46,8 @@ class Board:
         )
 
     @staticmethod
-    def vertical_winner(board, action) -> bool:
-        shift = action - 21
+    def vertical_winner(board, pos) -> bool:
+        shift = pos - 21
 
         if shift < 0:
             masked = (board << -shift) & 0x40810204081
@@ -62,8 +62,8 @@ class Board:
         )
 
     @staticmethod
-    def up_right_winner(board, action) -> bool:
-        shift = action - 24
+    def up_right_winner(board, pos) -> bool:
+        shift = pos - 24
         if shift < 0:
             masked = (board << -shift) & 0x41041041040
         else:
@@ -77,8 +77,8 @@ class Board:
         )
 
     @staticmethod
-    def up_left_winner(board, action) -> bool:
-        shift = action - 24
+    def up_left_winner(board, pos) -> bool:
+        shift = pos - 24
         if shift < 0:
             masked = (board << -shift) & 0x1010101010101
         else:
@@ -92,25 +92,28 @@ class Board:
         )
 
     @staticmethod
-    def check_winner(board, action) -> bool:
+    def check_winner(board, pos) -> bool:
         return (
-                Board.horizontal_winner(board, action) or
-                Board.vertical_winner(board, action) or
-                Board.up_right_winner(board, action) or
-                Board.up_left_winner(board, action)
+                Board.horizontal_winner(board, pos) or
+                Board.vertical_winner(board, pos) or
+                Board.up_right_winner(board, pos) or
+                Board.up_left_winner(board, pos)
         )
 
     def step(self, action: int) -> Board:
         clone_p1 = self.board_p1.clone()
         clone_p2 = self.board_p2.clone()
         clone_top = self.top.clone()
-        if self.player == 1:
-            clone_p1 |= 1 << (action + clone_top[action] * 6)
 
-            winner = self.check_winner(clone_p1, action)
+        pos = action + clone_top[action] * 7
+
+        if self.player == 1:
+            clone_p1 |= 1 << pos
+
+            winner = self.check_winner(clone_p1, pos)
         else:
-            clone_p2 |= 1 << (action + clone_top[action] * 6)
-            winner = self.check_winner(clone_p2, action)
+            clone_p2 |= 1 << pos
+            winner = self.check_winner(clone_p2, pos)
 
         clone_top[action] += 1
 
@@ -129,13 +132,13 @@ class Board:
     def tensor(self) -> Tensor:
         board = torch.zeros(6, 7, dtype=torch.long)
 
-        for pos in range(7 * 6):
-            idx = np.unravel_index(pos, (7, 6))
+        for col in range(7):
+            for row in range(6):
+                idx = row * 7 + col
 
-            if self.board_p1 & (1 << pos) > 0:
-                board[idx[0], idx[1]] = 1
-            elif self.board_p2 & (1 << pos) > 0:
-                board[idx[0], idx[1]] = 2
+                if self.board_p1 & (1 << idx) > 0:
+                    board[5 - row, col] = 1
+                elif self.board_p2 & (1 << idx) > 0:
+                    board[5 - row, col] = 2
 
         return board
-
