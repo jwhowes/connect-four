@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import numpy as np
 import torch
 from torch import Tensor
 from dataclasses import dataclass
@@ -12,16 +13,16 @@ from dataclasses import dataclass
 
 @dataclass
 class Board:
-    player: 0 | 1
+    player: 1 | 2
     board_p1: Tensor
     board_p2: Tensor
     top: Tensor
-    winner: Optional[0 | 1]
+    winner: Optional[0 | 1 | 2]
 
     @staticmethod
     def initial() -> Board:
         return Board(
-            player=0,
+            player=1,
             board_p1=torch.zeros(size=(), dtype=torch.long),
             board_p2=torch.zeros(size=(), dtype=torch.long),
             top=torch.zeros(7, dtype=torch.long),
@@ -62,11 +63,33 @@ class Board:
 
     @staticmethod
     def up_right_winner(board, action) -> bool:
-        return False  # TODO
+        shift = action - 24
+        if shift < 0:
+            masked = (board << -shift) & 0x41041041040
+        else:
+            masked = (board >> shift) & 0x41041041040
+
+        return (
+            masked & 0x41041000000 == 0x41041000000 or
+            masked & 0x820820000 == 0x820820000 or
+            masked & 0x10410400 == 0x10410400 or
+            masked & 0x208208 == 0x208208
+        )
 
     @staticmethod
     def up_left_winner(board, action) -> bool:
-        return False  # TODO
+        shift = action - 24
+        if shift < 0:
+            masked = (board << -shift) & 0x1010101010101
+        else:
+            masked = (board >> shift) & 0x1010101010101
+
+        return (
+            masked & 0x1010101000000 == 0x1010101000000 or
+            masked & 0x20202020000 == 0x20202020000 or
+            masked & 0x404040400 == 0x404040400 or
+            masked & 0x8080808 == 0x8080808
+        )
 
     @staticmethod
     def check_winner(board, action) -> bool:
@@ -81,22 +104,38 @@ class Board:
         clone_p1 = self.board_p1.clone()
         clone_p2 = self.board_p2.clone()
         clone_top = self.top.clone()
-        if self.player == 0:
-            clone_p1 |= 1 << (action + clone_top[action] * 7)
+        if self.player == 1:
+            clone_p1 |= 1 << (action + clone_top[action] * 6)
 
             winner = self.check_winner(clone_p1, action)
         else:
-            clone_p2 |= 1 << (action + clone_top[action] * 7)
+            clone_p2 |= 1 << (action + clone_top[action] * 6)
             winner = self.check_winner(clone_p2, action)
 
+        clone_top[action] += 1
+
         return Board(
-            player=1 - self.player if not winner else self.player,
+            player=-self.player + 3 if not winner else self.player,
             board_p1=clone_p1,
             board_p2=clone_p2,
             top=clone_top,
-            winner=self.player if winner else None
+            winner=self.player if winner else (0 if (clone_top >= 6).all() else None)
         )
 
     @property
     def legal_moves(self) -> Tensor:
         return self.top < 6
+
+    def tensor(self) -> Tensor:
+        board = torch.zeros(6, 7, dtype=torch.long)
+
+        for pos in range(7 * 6):
+            idx = np.unravel_index(pos, (7, 6))
+
+            if self.board_p1 & (1 << pos) > 0:
+                board[idx[0], idx[1]] = 1
+            elif self.board_p2 & (1 << pos) > 0:
+                board[idx[0], idx[1]] = 2
+
+        return board
+

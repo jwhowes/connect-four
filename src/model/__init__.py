@@ -1,7 +1,6 @@
 from typing import Tuple
 
 from torch import nn, Tensor
-from einops import rearrange
 
 from .transformer import ViT
 from .conv import ConvBlock
