@@ -1,5 +1,4 @@
 from math import sqrt
-from typing import Optional
 
 import torch
 from torch import Tensor
