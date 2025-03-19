@@ -1,6 +1,7 @@
 from typing import Tuple
 from abc import ABC
 
+import torch.nn.functional as F
 from torch import nn, Tensor
 
 from ..util import RMSNorm
@@ -27,6 +28,9 @@ class ViTAgent(Agent, ViT):
             attn_dropout=attn_dropout,
             ffn_dropout=ffn_dropout
         )
+
+    def forward(self, board: Tensor) -> Tensor:
+        return ViT.forward(self, F.one_hot(board, num_classes=3).permute(0, 3, 1, 2).float())
 
 
 class ConvAgent(Agent):
@@ -57,7 +61,9 @@ class ConvAgent(Agent):
             nn.Linear(dims[-1], 1)
         )
 
-    def forward(self, grid: Tensor) -> Tensor:
+    def forward(self, board: Tensor) -> Tensor:
         return self.head(
-            self.conv(grid).mean((2, 3))
+            self.conv(
+                F.one_hot(board, num_classes=3).permute(0, 3, 1, 2).float()
+            ).mean((2, 3))
         ).squeeze(-1)

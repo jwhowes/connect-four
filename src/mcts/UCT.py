@@ -18,8 +18,7 @@ class UCT(AbstractMCTS):
     class Node(AbstractMCTSNode):
         pass
 
-    @staticmethod
-    def heuristic(board: Board) -> 0 | 1 | 2:
+    def heuristic(self, board: Board) -> 0 | 1 | 2:
         while board.winner is None:
             board = board.step(
                 np.random.choice(torch.where(board.legal_moves)[0])

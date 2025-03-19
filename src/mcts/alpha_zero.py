@@ -1,6 +1,5 @@
 from math import sqrt
 
-import torch
 from torch import Tensor
 
 from ..model import ModelConfig, Agent
@@ -19,9 +18,10 @@ class AlphaZero(UCT):
 
         self.model = config.build()
 
-    @staticmethod
-    def heuristic(board: Board) -> Tensor:
-        return torch.zeros(size=())  # TODO. Call model
+    def heuristic(self, board: Board) -> Tensor:
+        return self.model(
+            board.tensor().unsqueeze(0)
+        ).squeeze(0)
 
     @staticmethod
     def backtrack_value(node: UCT.Node, heuristic_value: Tensor, action: int):

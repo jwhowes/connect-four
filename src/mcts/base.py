@@ -9,6 +9,15 @@ from torch import Tensor
 
 from ..gym import Board
 
+# TODO
+#   - Run multiple asynchronous workers with virtual loss
+#   - Heuristic runs in a separate, asynchronous process
+#   - For alpha zero we have two processes: model and sim
+#   - The model process continuously takes a batch from the queue, processes it and returns the result to the sim thread
+#   - The sim thread consists of asynchronous workers. Each worker spawns and executes a simulation (using virtual loss)
+#     until it reaches the forward pass. At this point it adds its board to the queue (awaiting heuristic) and another
+#     thread runs while it's waiting. Importantly, we resume threads in a FIFO manner.
+
 
 class AbstractMCTSNode(ABC):
     def __init__(self, player: 1 | 2, parent: Optional[AbstractMCTSNode] = None, action: Optional[int] = None):
@@ -38,9 +47,8 @@ class AbstractMCTS(ABC):
     def expansion_value(node: Node, node_visits: int) -> Tensor:
         ...
 
-    @staticmethod
     @abstractmethod
-    def heuristic(board: Board):
+    def heuristic(self, board: Board):
         ...
 
     @staticmethod
@@ -73,8 +81,11 @@ class AbstractMCTS(ABC):
         node.expanded[child_idx] = True
         node.children[child_idx] = self.Node(player=board.player, parent=node, action=child_idx)
 
+        node.num_visits[child_idx] += 1
         heuristic_value = self.heuristic(board)
+        self.backtrack_value(node, heuristic_value, child_idx)
 
+        node = node.parent
         while node is not None:
             self.backtrack_value(node, heuristic_value, child_idx)
             node.num_visits[child_idx] += 1
