@@ -19,6 +19,15 @@ class Board:
     top: Tensor
     winner: Optional[0 | 1 | 2]
 
+    def clone(self) -> Board:
+        return Board(
+            player=self.player,
+            board_p1=self.board_p1,
+            board_p2=self.board_p2,
+            top=self.top,
+            winner=self.winner
+        )
+
     @staticmethod
     def initial() -> Board:
         return Board(
