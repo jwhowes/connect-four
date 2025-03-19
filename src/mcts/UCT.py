@@ -14,7 +14,7 @@ from .base import AbstractMCTSNode, AbstractMCTS
 EXPLORATION_COEFF = sqrt(2.0)
 
 
-class UCTMCTS(AbstractMCTS):
+class UCT(AbstractMCTS):
     class Node(AbstractMCTSNode):
         pass
 
@@ -27,7 +27,8 @@ class UCTMCTS(AbstractMCTS):
 
         return board.winner
 
-    def expansion_value(self, node: Node, node_visits: int) -> Tensor:
+    @staticmethod
+    def expansion_value(node: Node, node_visits: int) -> Tensor:
         return (
             (node.total_value / node.num_visits) +
             EXPLORATION_COEFF * torch.sqrt(np.log(node_visits) / node.num_visits)

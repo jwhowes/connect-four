@@ -1,1 +1,1 @@
-from .UCT import UCTMCTS
+from .UCT import UCT

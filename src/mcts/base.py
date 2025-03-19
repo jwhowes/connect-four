@@ -33,8 +33,9 @@ class AbstractMCTS(ABC):
         self.board: Board = Board.initial()
         self.root = self.Node(player=1)
 
+    @staticmethod
     @abstractmethod
-    def expansion_value(self, node: Node, node_visits: int) -> Tensor:
+    def expansion_value(node: Node, node_visits: int) -> Tensor:
         ...
 
     @staticmethod

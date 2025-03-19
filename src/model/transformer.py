@@ -84,7 +84,7 @@ class ViT(nn.Module):
 
         self.head = nn.Sequential(
             RMSNorm(d_model),
-            nn.Linear(d_model, 7)
+            nn.Linear(d_model, 1)
         )
 
     def forward(self, grid: Tensor) -> Tensor:
@@ -99,4 +99,4 @@ class ViT(nn.Module):
 
         x = self.transformer(x)
 
-        return self.head(x[:, 0])
+        return self.head(x[:, 0]).squeeze(-1)
