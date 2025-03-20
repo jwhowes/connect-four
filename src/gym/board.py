@@ -138,16 +138,17 @@ class Board:
     def legal_moves(self) -> Tensor:
         return self.top < 6
 
-    def tensor(self) -> Tensor:
+    @staticmethod
+    def to_tensor(board_p1: int, board_p2: int) -> Tensor:
         board = torch.zeros(6, 7, dtype=torch.long)
 
         for col in range(7):
             for row in range(6):
                 idx = row * 7 + col
 
-                if self.board_p1 & (1 << idx) > 0:
+                if board_p1 & (1 << idx) > 0:
                     board[5 - row, col] = 1
-                elif self.board_p2 & (1 << idx) > 0:
+                elif board_p2 & (1 << idx) > 0:
                     board[5 - row, col] = 2
 
         return board
